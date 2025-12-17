@@ -86,25 +86,6 @@
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-
-            <TextBlock Grid.Column="0"
-                   Text="Archivo Excel:"
-                   VerticalAlignment="Center"
-                   Margin="0,0,5,0"/>
-
-            <TextBox Grid.Column="1"
-             x:Name="ExcelFilePathTextBox"
-             IsReadOnly="True"
-             Text=""
-             VerticalAlignment="Center"
-             Margin="0,0,5,0"
-             Style="{StaticResource FilePathTextBoxStyle}" />
-
-            <Button Grid.Column="2"
-                x:Name="SelectExcelFileButton"
-                Content="Seleccionar Archivo"
-                Click="SelectExcelFileButton_Click"
-                VerticalAlignment="Center"/>
         </Grid>
 
         <TextBlock Grid.Row="1"

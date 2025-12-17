@@ -8,6 +8,7 @@ using DataFlow.Core.Features.Queries;
 using DataFlow.Core.Models;
 using DataFlow.UI.Controls;
 using DataFlow.UI.Services;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -109,8 +110,8 @@ namespace DataFlow.UI.Pages
         private void InitializeDisplay()
         {
 
-            
-            ExcelFilePathTextBlock.Text = _appStateService.ExcelFilePath ?? "No se ha seleccionado archivo Excel.";
+
+            ExcelFilePathTextBox.Text = _appStateService.ExcelFilePath ?? "No se ha seleccionado archivo Excel.";
             ProcessStatusTextBlock.Text = "Listo para iniciar el proceso.";
             ProcessStatusTextBlock.Foreground = Brushes.Black;
             OutputPathTextBlock.Text = "";
@@ -276,10 +277,21 @@ namespace DataFlow.UI.Pages
             }
             catch (Exception ex)
             {
-                {
-
-                    MessageBox.Show("Error al guardar el hostorico", "Error Crítico", MessageBoxButton.OK, MessageBoxImage.Error);
-                }
+                   MessageBox.Show($"Error al guardar el historico :{ex.Message} ", "Error Crítico", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+        private void SelectExcelFileButton_Click(object sender, RoutedEventArgs e)
+        {
+            var openFileDialog = new OpenFileDialog
+            {
+                Filter = "Archivos de Excel (*.xlsx;*.xls)|*.xlsx;*.xls|Todos los archivos (*.*)|*.*",
+                Title = "Seleccionar archivo de Excel",
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+            };
+            if (openFileDialog.ShowDialog() == true)
+            {
+                _appStateService.ExcelFilePath = openFileDialog.FileName;
+                ExcelFilePathTextBox.Text = openFileDialog.FileName;
             }
         }
     }

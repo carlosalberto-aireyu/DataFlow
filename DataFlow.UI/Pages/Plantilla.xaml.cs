@@ -58,7 +58,6 @@ namespace DataFlow.UI.Pages
                 {
                     _viewModel.RefreshCommand.Execute(null);
                 }
-                ExcelFilePathTextBox.Text = _appStateService.ExcelFilePath ?? string.Empty;
             }
             catch (Exception ex)
             {
@@ -224,20 +223,7 @@ namespace DataFlow.UI.Pages
                 MessageBox.Show($"Error navegando a Columnas: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
-        private void SelectExcelFileButton_Click(object sender, RoutedEventArgs e)
-        {
-            var openFileDialog = new OpenFileDialog
-            {
-                Filter = "Archivos de Excel (*.xlsx;*.xls)|*.xlsx;*.xls|Todos los archivos (*.*)|*.*",
-                Title = "Seleccionar archivo de Excel",
-                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
-            };
-            if (openFileDialog.ShowDialog() == true)
-            {
-                _appStateService.ExcelFilePath = openFileDialog.FileName;
-                ExcelFilePathTextBox.Text = openFileDialog.FileName;
-            }
-        }
+       
        
     }
 }
