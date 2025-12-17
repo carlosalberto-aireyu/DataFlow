@@ -1,0 +1,92 @@
+﻿<Page x:Class="DataFlow.UI.Pages.Opciones"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+      xmlns:local="clr-namespace:DataFlow.UI.Pages"
+      xmlns:constants="clr-namespace:DataFlow.Core.Constants;assembly=DataFlow.Core" 
+      xmlns:components="clr-namespace:DataFlow.UI.Pages.Components"
+      xmlns:viewmodels="clr-namespace:DataFlow.UI.ViewModels" 
+      xmlns:converters="clr-namespace:DataFlow.UI.Converters"
+    d:DataContext="{d:DesignInstance Type=viewmodels:ParametrosViewModel}"
+      mc:Ignorable="d"
+      d:DesignHeight="600" d:DesignWidth="900"
+      Title="Opciones">
+    <Grid Margin="12">
+
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        <Border Grid.Column="0" BorderBrush="LightGray" BorderThickness="0,0,0,1">
+            <DockPanel Grid.Row="0" Margin="0,0,0,8">
+                <TextBlock Text="Opciones" Style="{StaticResource PageTitleTextStyle}" DockPanel.Dock="Left"/>
+                <!-- Botones de acción 
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button Style="{StaticResource IconOnlyButtonStyle}"
+                        Click="EditButton_Click"
+                        ToolTip="Editar Parámetro"
+                        Tag="M17,3 L21,7 L7,21 L3,21 L3,17 L17,3"/>
+                    <Button Style="{StaticResource IconOnlyButtonStyle}"
+                        Command="{Binding RefreshCommand}"
+                        ToolTip="Actualizar"
+                        Tag="M12,4 V7 A7,7 0 0 1 19,14 H16 M12,20 V17 A7,7 0 0 1 5,10 H8 M12,4 L15,7 L12,10 M12,20 L9,17 L12,14" />
+                </StackPanel>
+                -->
+            </DockPanel>
+        </Border>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="200"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" BorderBrush="LightGray" BorderThickness="0,0,1,0" Padding="10">
+                <Grid>
+                    <ListBox 
+                        x:Name="ParametrosList"
+                        ItemsSource="{Binding Items}"
+                     SelectedItem="{Binding SelectedItem, Mode=TwoWay}"
+                     DisplayMemberPath="Name"
+                     />
+                </Grid>
+            </Border>
+
+            <Border Grid.Column="1" Padding="20" Margin="10,0,0,0" VerticalAlignment="Top">
+                <components:WorkDirectory 
+                        DataContext="{Binding SelectedItem}"
+                        Visibility="{Binding ParametroKey, 
+                     Converter={StaticResource EnumToVisibilityConverter}, 
+                     ConverterParameter=WorkDirectory,
+                     FallbackValue=Collapsed,
+                     TargetNullValue=Collapsed}" />
+            </Border>
+            <Border Grid.Column="1" Padding="20" Margin="10,0,0,0" VerticalAlignment="Top">
+                <components:DataToJsonExporter
+                    DataContext="{Binding SelectedItem}"
+                        Visibility="{Binding ParametroKey, 
+                    Converter={StaticResource EnumToVisibilityConverter}, 
+                    ConverterParameter=DataToJsonExporter,
+                    FallbackValue=Collapsed,
+                    TargetNullValue=Collapsed}" />
+            </Border>
+
+            
+
+
+        </Grid>
+
+        <StackPanel Grid.Row="2"
+            Orientation="Horizontal"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Text="Cargando parámetros..."
+                       Foreground="#6B7280"
+                       VerticalAlignment="Center"
+                       Margin="0,0,8,0"/>
+        </StackPanel>
+    </Grid>
+</Page>

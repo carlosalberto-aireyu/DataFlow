@@ -1,0 +1,117 @@
+﻿<Page x:Class="DataFlow.UI.Pages.Plantilla"
+      xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+      xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+      xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
+      xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
+      xmlns:local="clr-namespace:DataFlow.UI.Pages"
+      mc:Ignorable="d" 
+      d:DesignHeight="450" d:DesignWidth="800"
+   
+      Title="Plantillas">
+
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <DockPanel Grid.Row="0" Margin="0,0,0,8">
+            <TextBlock Text="Plantillas" Style="{StaticResource PageTitleTextStyle}" DockPanel.Dock="Left"/>
+
+
+            <StackPanel Orientation="Horizontal" Grid.Row="0" Margin="0,0,0,8" VerticalAlignment="Center" HorizontalAlignment="Right" >
+
+
+                <Button Style="{StaticResource IconOnlyButtonStyle}"
+                    Click="AddButton_Click"
+                    ToolTip="Agregar"
+                    Tag="M0,5 L10,5 M5,0 L5,10"/>
+                
+                <Button Style="{StaticResource IconOnlyButtonStyle}"
+                    ToolTip="Editar"
+                    Click="EditButton_Click"
+                    Tag="M17,3 L21,7 L7,21 L3,21 L3,17 L17,3"/>
+                <Button Style="{StaticResource IconOnlyButtonStyle}"
+                    ToolTip="Actualizar"
+                    Command="{Binding RefreshCommand}"
+                    Tag="M12,4 V7 A7,7 0 0 1 19,14 H16 M12,20 V17 A7,7 0 0 1 5,10 H8 M12,4 L15,7 L12,10 M12,20 L9,17 L12,14"/>
+                <Button Style="{StaticResource IconOnlyButtonStyle}"
+                    ToolTip="Eliminar"
+                    Click="DeleteButton_Click"
+                    Tag="M3,6 H21 M8,6 V4 H16 V6 M19,6 V20 C19,21 18,22 17,22 H7 C6,22 5,21 5,20 V6 M10,11 V17 M14,11 V17"/>
+                
+                <TextBox x:Name="FilterInput"
+                     Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}"
+                     Style="{StaticResource FilterTextBoxStyle}"
+                     Width="250"
+                     BorderBrush="#CCCCCC"
+                     BorderThickness="1"
+                     />
+            </StackPanel>
+        </DockPanel>
+
+
+        <DataGrid  Grid.Row="1" ItemsSource="{Binding FilteredItems}"
+                   Style="{StaticResource ModernDataGridStyle}"
+                   RowStyle="{StaticResource ModernDataGridRowStyle}"
+                   ColumnHeaderStyle="{StaticResource ModernDataGridColumnHeaderStyle}"
+                   CellStyle="{StaticResource CleanDataGridCellStyle}"
+                   
+              AutoGenerateColumns="False" CanUserAddRows="False" 
+              IsReadOnly="True" SelectionMode="Single" 
+              SelectedItem="{Binding SelectedItem, Mode=TwoWay}" 
+              MouseDoubleClick="DataGrid_MouseDoubleClick">
+
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Id" Binding="{Binding Id}" Width="60"/>
+                <DataGridTextColumn Header="Descripción" Binding="{Binding Description}" Width="*"/>
+                <DataGridTextColumn Header="Creado" Binding="{Binding CreatedAtFormatted}" Width="160"/>
+                <DataGridTextColumn Header="Actualizado" Binding="{Binding UpdatedAtFormatted}" Width="160"/>
+            </DataGrid.Columns>
+        </DataGrid>
+        <StackPanel Grid.Row="1"
+            Orientation="Horizontal"
+            HorizontalAlignment="Center"
+            Margin="0,8,0,0"
+            Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <TextBlock Text="Cargando..." 
+               Foreground="#6B7280"
+               VerticalAlignment="Center"
+               Margin="0,0,8,0"/>
+        </StackPanel>
+        <Grid Grid.Row="2" Margin="5" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <TextBlock Grid.Column="0"
+                   Text="Archivo Excel:"
+                   VerticalAlignment="Center"
+                   Margin="0,0,5,0"/>
+
+            <TextBox Grid.Column="1"
+             x:Name="ExcelFilePathTextBox"
+             IsReadOnly="True"
+             Text=""
+             VerticalAlignment="Center"
+             Margin="0,0,5,0"
+             Style="{StaticResource FilePathTextBoxStyle}" />
+
+            <Button Grid.Column="2"
+                x:Name="SelectExcelFileButton"
+                Content="Seleccionar Archivo"
+                Click="SelectExcelFileButton_Click"
+                VerticalAlignment="Center"/>
+        </Grid>
+
+        <TextBlock Grid.Row="1"
+           Text="{Binding ErrorMessage}"
+           Foreground="#DC2626"
+           Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"
+           Margin="0,8,0,0"
+           TextWrapping="Wrap"/>
+    </Grid>
+</Page>

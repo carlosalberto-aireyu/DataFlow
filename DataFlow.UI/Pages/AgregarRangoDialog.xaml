@@ -1,0 +1,161 @@
+﻿<Window x:Class="DataFlow.UI.Pages.AgregarRangoDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:DataFlow.UI.Pages"
+        mc:Ignorable="d"
+        Title="Agregar Rango"
+        Background="Transparent"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        ShowInTaskbar="False">
+
+    <Border Background="White" CornerRadius="0">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="8" Opacity="0.3" ShadowDepth="2"/>
+        </Border.Effect>
+
+        <Grid Margin="24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- Título -->
+            <TextBlock Grid.Row="0" 
+                   Text="Crear Nuevo Rango" 
+                   FontSize="18" 
+                   FontWeight="SemiBold" 
+                   Foreground="#1F2937"
+                   Margin="0,0,0,16"/>
+
+            <!-- Desde -->
+            <Grid Grid.Row="1" Margin="0,0,0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" 
+                       Text="Desde" 
+                       FontSize="12" 
+                       FontWeight="SemiBold" 
+                       Foreground="#374151"
+                       Margin="0,0,0,6"/>
+
+                <Border Grid.Row="1"
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                    <TextBox x:Name="DesdeTextBox"
+                         Width="320"
+                         Height="36"
+                         Padding="12,8"
+                         FontSize="13"
+                         MaxLength="100"
+                         BorderThickness="0"
+                         Background="Transparent"/>
+                </Border>
+            </Grid>
+
+            <!-- Hasta -->
+            <Grid Grid.Row="2" Margin="0,0,0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" 
+                       Text="Hasta" 
+                       FontSize="12" 
+                       FontWeight="SemiBold" 
+                       Foreground="#374151"
+                       Margin="0,0,0,6"/>
+
+                <Border Grid.Row="1"
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                    <TextBox x:Name="HastaTextBox"
+                         Width="320"
+                         Height="36"
+                         Padding="12,8"
+                         FontSize="13"
+                         MaxLength="100"
+                         BorderThickness="0"
+                         Background="Transparent"/>
+                </Border>
+            </Grid>
+            <!-- Hasta -->
+            <Grid Grid.Row="2" Margin="0,0,0,12">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <TextBlock Grid.Row="0" 
+                   Text="Valor por Defecto" 
+                   FontSize="12" 
+                   FontWeight="SemiBold" 
+                   Foreground="#374151"
+                   Margin="0,0,0,6"/>
+                <Border Grid.Row="1"
+                            Background="White"
+                            BorderBrush="#D1D5DB"
+                            BorderThickness="1"
+                            CornerRadius="4">   
+                            <TextBox x:Name="DefaultValueTextBox"
+                                 Width="320"
+                                 Height="36"
+                                 Padding="12,8"
+                                 FontSize="13"
+                                 MaxLength="100"
+                                 BorderThickness="0"
+                                 Background="Transparent"/> 
+                        </Border>
+            </Grid>
+
+            <!-- Error Message -->
+            <TextBlock x:Name="ErrorMessage"
+                   Grid.Row="3"
+                   Foreground="#DC2626"
+                   FontSize="11"
+                   Margin="0,0,0,12"
+                   TextWrapping="Wrap"
+                   Visibility="Collapsed"/>
+
+            <!-- Botones -->
+            <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="CancelButton"
+                    Content="Cancelar"
+                    Width="100"
+                    Height="36"
+                    IsCancel="True"
+                    Click="CancelButton_Click"
+                    Foreground="#374151"
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    Margin="0,0,8,0"/>
+
+                <Button x:Name="CreateButton"
+                    Content="Crear"
+                    Width="100"
+                    Height="36"
+                    IsDefault="True"
+                    Click="CreateButton_Click"
+                    Foreground="White"
+                    Background="#3B82F6"
+                    BorderThickness="0"
+                    Cursor="Hand"/>
+            </StackPanel>
+        </Grid>
+    </Border>
+</Window>

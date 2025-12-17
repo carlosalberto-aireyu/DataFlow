@@ -1,0 +1,177 @@
+﻿<Window x:Class="DataFlow.UI.Pages.AgregarColumnaDialog"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:DataFlow.UI.Pages"
+        mc:Ignorable="d"
+        Title="Agregar Columna"
+        Background="Transparent"
+        SizeToContent="WidthAndHeight"
+        WindowStartupLocation="CenterOwner"
+        ResizeMode="NoResize"
+        MinWidth="480"
+        ShowInTaskbar="False">
+
+    <Border Background="White" >
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="8" Opacity="0.3" ShadowDepth="2"/>
+        </Border.Effect>
+
+        <StackPanel Margin="24" Orientation="Vertical">
+            
+            <TextBlock
+                   Text="Crear Nueva Columna" 
+                   FontSize="18" 
+                   FontWeight="SemiBold" 
+                   Foreground="#1F2937"
+                   Margin="0,0,0,16"/>
+
+            <StackPanel Margin="0,0,0,12">
+                <TextBlock Style="{StaticResource ModernTextBlock}"
+                   Text="Indice" Margin="0,0,0,6"/>
+
+                <Border Grid.Row="1"
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                    <TextBox x:Name="IndexColumnTextBox"
+                         Style="{StaticResource ModernTextBox}"
+                         Text="{Binding IndexColumn, UpdateSourceTrigger=PropertyChanged}"/>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Margin="0,0,0,12">
+                <TextBlock Text="Nombre" 
+                       Style="{StaticResource ModernTextBlock}"
+                       Margin="0,0,0,6"/>
+
+                <Border
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                    <TextBox x:Name="NombreTextBox"
+                         Style="{StaticResource ModernTextBox}"
+                         Text="{Binding ColumnName, UpdateSourceTrigger=PropertyChanged}"/>
+                </Border>
+            </StackPanel>
+
+
+            <StackPanel Margin="0,0,0,12">
+
+                <TextBlock
+                       Text="Nombre para Mostrar" 
+                       Style="{StaticResource ModernTextBlock}"
+                       Margin="0,0,0,6"/>
+
+                <Border
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                    <TextBox x:Name="DisplayNameTextBox"
+                         Style="{StaticResource ModernTextBox}"
+                         Text="{Binding DisplayName, UpdateSourceTrigger=PropertyChanged}"/>
+                </Border>
+            </StackPanel>
+
+
+            <StackPanel Margin="0,0,0,12">
+
+                <TextBlock
+                       Text="Tipo de Dato" 
+                       Style="{StaticResource ModernTextBlock}"
+                       Margin="0,0,0,6"/>
+                <ComboBox x:Name="DataTypeComboBox"
+                      Style="{StaticResource ModernComboBox}"
+                      ItemsSource="{Binding DataTypes}"
+                      SelectedItem="{Binding SelectedDataType}"
+                      DisplayMemberPath="Code"/>
+            </StackPanel>
+
+
+            <StackPanel Margin="0,0,0,12">
+                <TextBlock
+                       Text="Valor por Defecto" 
+                       Style="{StaticResource ModernTextBlock}"
+                       Margin="0,0,0,6"/>
+
+                <Border
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                    <TextBox x:Name="DefaultValueTextBox"
+                         Style="{StaticResource ModernTextBox}"
+                         Text="{Binding DefaultValue, UpdateSourceTrigger=PropertyChanged}"/>
+                </Border>
+            </StackPanel>
+
+
+            <StackPanel Margin="0,0,0,12">
+                <TextBlock 
+                       Text="Tipo de Columna" 
+                       Style="{StaticResource ModernTextBlock}"
+                       Margin="0,0,0,6"/>
+                <ComboBox x:Name="ColumnTypeComboBox"
+                         Style="{StaticResource ModernComboBox}"
+                         SelectedItem="{Binding SelectedColumnType}"
+                         ItemsSource="{Binding ColumnTypes}"
+                         DisplayMemberPath="Code"/>
+            </StackPanel>
+
+
+            <StackPanel Margin="0,0,0,20">
+                <TextBlock 
+                       Text="Descripción" 
+                       Style="{StaticResource ModernTextBlock}"
+                       Margin="0,0,0,6"/>
+
+                <Border 
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    CornerRadius="4">
+                    <TextBox x:Name="DescripcionTextBox"
+                         Style="{StaticResource ModernTextBox}"
+                         Text="{Binding Description, UpdateSourceTrigger=PropertyChanged}"/>
+                </Border>
+            </StackPanel>
+
+
+            <TextBlock x:Name="ErrorMessage"
+                   Foreground="#DC2626"
+                   FontSize="11"
+                   Margin="0,0,0,12"
+                   TextWrapping="Wrap"
+                   Visibility="Collapsed"/>
+
+
+            <StackPanel  Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="CancelButton"
+                    Content="Cancelar"
+                    Width="100"
+                    Height="36"
+                    IsCancel="True"
+                    Click="CancelButton_Click"
+                    Foreground="#374151"
+                    Background="White"
+                    BorderBrush="#D1D5DB"
+                    BorderThickness="1"
+                    Margin="0,0,8,0"/>
+                <Button x:Name="CreateButton"
+                    Content="Crear"
+                    Width="100"
+                    Height="36"
+                    IsDefault="True"
+                    Click="CreateButton_Click"
+                    Foreground="White"
+                    Background="#3B82F6"
+                    BorderThickness="0"
+                    Cursor="Hand"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</Window>

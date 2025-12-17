@@ -1,0 +1,80 @@
+﻿<Window x:Class="DataFlow.UI.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        xmlns:local="clr-namespace:DataFlow.UI"
+        xmlns:controls="clr-namespace:DataFlow.UI.Controls"
+        xmlns:pages="clr-namespace:DataFlow.UI.Pages"
+        mc:Ignorable="d"
+        Title="Normalizador XLSX" Height="720" Width="1280"
+        Icon="/Resources/repsolico.ico"
+        MinHeight="480" MinWidth="640">
+
+    <Grid Background="#F7F7F7">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="60"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Border Grid.Row="0" Background="#F7F7F7">
+            <DockPanel LastChildFill="False" VerticalAlignment="Center" Margin="10,0,10,0">
+                <controls:NavButton 
+                    DockPanel.Dock="Right"
+                    Command="{Binding OpcionesCommand}"
+                    IsSelected="{Binding IsOpcionesSelected}"
+                    ButtonText="Opciones"
+                    NavLink="/Pages/Opciones.xaml" 
+                    Tag="{x:Type pages:Opciones}"
+                    Padding="6"
+                    ShowRightDivider="False"
+                    Icon="M19.14 12.94c.04-.3.06-.61.06-.94c0-.32-.02-.64-.07-.94l2.03-1.58a.5.5 0 0 0 .12-.61l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.46h-3.84a.5.5 0 0 0-.5.46l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22l-1.92 3.32c-.15.25-.08.56.12.61l2.03 1.58c-.05.3-.09.63-.09.94c0 .31.04.64.07.94l-2.03 1.58a.5.5 0 0 0-.12.61l1.92 3.32c.15.25.38.33.61.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.45.44.8.99.8h3.84c.55 0 .94-.35.99-.8l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.23.09.46.01.61-.22l1.92-3.32c.2-.34.07-.65-.12-.61l-2.03-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6s3.6 1.62 3.6 3.6s-1.62 3.6-3.6 3.6z"/>
+                <StackPanel 
+                    DockPanel.Dock="Left"
+                    x:Name="navStackPanel" 
+                    Orientation="Horizontal" 
+                    VerticalAlignment="Center">
+
+                    <controls:NavButton
+                            Command="{Binding PlantillaCommand}"
+                            NavLink="/Pages/Plantilla.xaml"
+                            ButtonText="Plantillas"
+                            IsSelected="{Binding IsPlantillaSelected}"
+                            Tag="{x:Type pages:Plantilla}"
+                            Margin="3" 
+                            Padding="6"
+                            ShowRightDivider="True"
+                            Icon="M120-840h320v320H120v-320Zm80 80v160-160Zm320-80h320v320H520v-320Zm80 80v160-160ZM120-440h320v320H120v-320Zm80 80v160-160Zm440-80h80v120h120v80H720v120h-80v-120H520v-80h120v-120Zm-40-320v160h160v-160H600Zm-400 0v160h160v-160H200Zm0 400v160h160v-160H200Z"/>
+                    <controls:NavButton 
+                            Command="{Binding ColumnasCommand}"
+                            IsSelected="{Binding IsColumnasSelected}"
+                            ButtonText="Columnas"
+                            NavLink="/Pages/Columnas.xaml"
+                            Tag="{x:Type pages:Columnas}"
+                            ShowRightDivider="True"
+                            Margin="3" Padding="6" Icon="M160-760v560h240v-560H160ZM80-120v-720h720v160h-80v-80H480v560h240v-80h80v160H80Zm400-360Zm-80 0h80-80Zm0 0Zm320 120v-80h-80v-80h80v-80h80v80h80v80h-80v80h-80Z"/>
+                    <controls:NavButton 
+                            Command="{Binding ProcesoCommand}"
+                            IsSelected="{Binding IsProcesoSelected}"
+                            ButtonText="Procesar"
+                            NavLink="/Pages/Proceso.xaml" 
+                            Tag="{x:Type pages:Proceso}"
+                            ShowRightDivider="True"
+                            Margin="3" Padding="6" Icon="M12,4 L12,8 L20,12 L12,16 L12,20 L24,12 Z"/>
+                    <controls:NavButton 
+                            Command="{Binding HistorialCommand}"
+                            IsSelected="{Binding IsHistorialSelected}"
+                            ButtonText="Historial"
+                            NavLink="/Pages/Historial.xaml" 
+                            Tag="{x:Type pages:Historial}"
+                            ShowRightDivider="False"
+                            Margin="3" Padding="6" Icon="M480-120q-138 0-240.5-91.5T122-440h82q14 104 92.5 172T480-200q117 0 198.5-81.5T760-480q0-117-81.5-198.5T480-760q-69 0-129 32t-101 88h110v80H120v-240h80v94q51-64 124.5-99T480-840q75 0 140.5 28.5t114 77q48.5 48.5 77 114T840-480q0 75-28.5 140.5t-77 114q-48.5 48.5-114 77T480-120Zm112-192L440-464v-216h80v184l128 128-56 56Z"/>
+                </StackPanel>
+            </DockPanel>
+
+        </Border>
+        <Frame NavigationUIVisibility="Hidden"
+            Grid.Row="1"
+            x:Name="navFrame" 
+            Background="#F7F7F7"/>
+    </Grid>
+</Window>
