@@ -22,5 +22,6 @@ namespace DataFlow.UI.Services
         Task<Result<bool>> DeleteAsync(ParametroItemViewModel parametro, CancellationToken cancellationToken = default);
         Task<string?> GetParametroValueByKeyAsync(string key, CancellationToken cancellationToken = default);
         Task<Result<bool>> SetParametroValueByKeyAsync(string key, string value, CancellationToken cancellationToken = default);
+        Task<Result<bool>> ImportarInformacionJson((string Path, bool Overwrite) data, CancellationToken cancellationToken = default);
     }
 }

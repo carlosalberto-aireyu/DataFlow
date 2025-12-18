@@ -11,7 +11,7 @@ namespace DataFlow.Core.Constants
     {
         [Display(Name = "Directorio de Trabajo", Description = "Ruta base para guardar los archivos generados por la aplicación.")]
         WorkDirectory,
-        [Display(Name = "Directorio de Expotacion", Description = "Ruta base de exportacion de información.")]
+        [Display(Name = "Exportar / Importar", Description = "Ruta base de exportacion de información.")]
         DataToJsonExporter
     }
 }

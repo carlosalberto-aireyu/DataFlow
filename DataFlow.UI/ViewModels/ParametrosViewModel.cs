@@ -38,17 +38,29 @@ namespace DataFlow.UI.ViewModels
             {
                 if (SetProperty(ref _selectedItem, value))
                 {
-                    // Asegurarse de que los comandos actualicen su estado CanExecute
                     ((AsyncRelayCommand)EditParametroCommand).RaiseCanExecuteChanged();
                     ((AsyncRelayCommand)DeleteParametroCommand).RaiseCanExecuteChanged();
                     ((RelayCommand)SelectDirectoryCommand).RaiseCanExecuteChanged();
 
-                    // *** Mensaje de depuración para verificar la clave del parámetro seleccionado ***
                     _logger.LogDebug($"SelectedItem.ParametroKey cambiado a: {value?.ParametroKey ?? "NULO"}");
                 }
             }
         }
-
+        private string _jsonFilePath = string.Empty;
+        public string JsonFilePath
+        {
+            get => _jsonFilePath;
+            set {
+                SetProperty(ref _jsonFilePath, value);
+                (ImportarInformacionCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            }
+        }
+        private bool _overwriteExisting;
+        public bool OverwriteExisting
+        {
+            get => _overwriteExisting;
+            set => SetProperty(ref _overwriteExisting, value);
+        }
         public bool IsBusy => _manager.IsBusy;
         public string? ErrorMessage => _manager.ErrorMessage;
         public int ItemCount => Items.Count;
@@ -58,7 +70,9 @@ namespace DataFlow.UI.ViewModels
         public ICommand EditParametroCommand { get; }
         public ICommand DeleteParametroCommand { get; }
         public ICommand SelectDirectoryCommand { get; }
+        public ICommand SelectJsonFileCommand { get; }
         public ICommand ExportarInformacionCommand { get; }
+        public ICommand ImportarInformacionCommand { get; }
 
         public ParametrosViewModel(
             IParametroManager manager,
@@ -83,7 +97,10 @@ namespace DataFlow.UI.ViewModels
             EditParametroCommand = new AsyncRelayCommand(EditParametroAsync, CanEditOrDeleteParametro);
             DeleteParametroCommand = new AsyncRelayCommand(DeleteParametroAsync, CanEditOrDeleteParametro);
             SelectDirectoryCommand = new RelayCommand(ExecuteSelectDirectory, CanExecuteSelectDirectory);
+            SelectJsonFileCommand = new RelayCommand(ExecuteSelectJsonFile);
+            ImportarInformacionCommand = new AsyncRelayCommand(ImportarInformacion, p => CanExecuteImportarInformacion());
             ExportarInformacionCommand = new AsyncRelayCommand(ExportarInformacion,CanExecuteSelectDirectory);
+
 
         }
 
@@ -105,6 +122,7 @@ namespace DataFlow.UI.ViewModels
                 (SelectedItem.ParametroKey == ParametroKey.WorkDirectory.ToString("G") ||
                  SelectedItem.ParametroKey == ParametroKey.DataToJsonExporter.ToString("G"));
         }
+        private bool CanExecuteImportarInformacion() => !string.IsNullOrWhiteSpace(JsonFilePath);
 
 
         private bool CanEditOrDeleteParametro(object? parameter) => SelectedItem != null;
@@ -140,6 +158,24 @@ namespace DataFlow.UI.ViewModels
                 }
             }
         }
+        private void ExecuteSelectJsonFile()
+        {
+            string myDocs = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+            var dialog = new OpenFileDialog
+            {
+                Title = "Seleccione su Archivo JSON",
+                Filter = "Archivos JSON (*.json)|*.json",
+                InitialDirectory = myDocs
+            };
+
+            if (dialog.ShowDialog() == true)
+            {
+                JsonFilePath = dialog.FileName;
+            } else 
+            {
+                JsonFilePath = string.Empty;
+            }
+        }
 
 
         private async Task LoadParametrosAsync(CancellationToken cancellationToken = default)
@@ -148,10 +184,10 @@ namespace DataFlow.UI.ViewModels
 
             if (result.IsSuccess)
             {
-                // Si la selección es nula y hay elementos en la lista, selecciona el primero por defecto.
+                
                 if (SelectedItem == null && Items.Any())
                 {
-                    //SelectedItem = Items.FirstOrDefault();
+                    SelectedItem = Items.FirstOrDefault();
                 }
                 _logger.LogInformation("Parámetros cargados exitosamente.");
             }
@@ -194,7 +230,7 @@ namespace DataFlow.UI.ViewModels
 
         private async Task EditParametroAsync(CancellationToken cancellationToken = default)
         {
-            // La llamada a CanEditOrDeleteParametro() dentro del método ya la controla el CanExecute del comando
+            
             if (SelectedItem == null)
             {
                 MessageBox.Show("Debe seleccionar un parámetro para editar.", "Advertencia", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -253,7 +289,6 @@ namespace DataFlow.UI.ViewModels
                 {
                     Application.Current.Dispatcher.Invoke(() => {
                         Items.Remove(currentSelectedItem);
-                        // Después de eliminar, selecciona el primer elemento restante si existe
                         SelectedItem = Items.FirstOrDefault();
                     });
                     MessageBox.Show("Parámetro eliminado exitosamente.", "Éxito", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -285,6 +320,33 @@ namespace DataFlow.UI.ViewModels
                 if(resultExp.IsSuccess && resultExp.Value)
                 {
                     MessageBox.Show("La exportacion se realizo de manera exitosa", "Éxito", MessageBoxButton.OK, MessageBoxImage.Information);
+                }
+            }
+        }
+        private async Task ImportarInformacion(CancellationToken cancellationToken = default)
+        {
+            if (string.IsNullOrWhiteSpace(JsonFilePath))
+            {
+                MessageBox.Show("Debe seleccionar un archivo JSON para continuar con la importación.", "Archivo no seleccionado", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            var result = MessageBox.Show(
+                $"¿Está seguro de que desea importar la información desde: '{JsonFilePath}'?",
+                "Confirmar Importación",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question,
+                MessageBoxResult.No);
+            if (result == MessageBoxResult.Yes)
+            {
+                var resultImp = await _manager.ImportarInformacionJson((Path: JsonFilePath, Overwrite: OverwriteExisting), cancellationToken);
+                if (resultImp.IsSuccess && resultImp.Value)
+                {
+                    MessageBox.Show($"La importación se realizó de manera exitosa desde: '{JsonFilePath}'", "Éxito", MessageBoxButton.OK, MessageBoxImage.Information);
+                    JsonFilePath = string.Empty;
+                }
+                else
+                {
+                    MessageBox.Show($"Error al importar la información: {resultImp.Error}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
                 }
             }
         }

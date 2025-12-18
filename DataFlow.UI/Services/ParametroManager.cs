@@ -5,6 +5,7 @@ using DataFlow.Core.Features.Commands;
 using DataFlow.Core.Features.Queries;
 using DataFlow.Core.Models; 
 using DataFlow.UI.ViewModels;
+using DocumentFormat.OpenXml.Office.Word;
 using Microsoft.Extensions.Logging;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -73,7 +74,7 @@ namespace DataFlow.UI.Services
                 _logger.LogWarning("ParametroManager error: {ErrorMessage}", ErrorMessage);
         }
 
-        public async Task<Result<ParametroItemViewModel>> CreateAsync(string key,string name, string value, string? description = null, CancellationToken cancellationToken = default)
+        public async Task<Result<ParametroItemViewModel>> CreateAsync(string key, string name, string value, string? description = null, CancellationToken cancellationToken = default)
         {
             SetBusy(true);
             SetError(null);
@@ -394,6 +395,32 @@ namespace DataFlow.UI.Services
                 _logger.LogError(ex, "Error al exportar la información del parámetro '{ParametroKey}'", parametroViewModel.ParametroKey);
                 SetError($"Error al exportar la información del parámetro: {ex.Message}");
                 return Result<bool>.Failure($"Error al exportar la información del parámetro: {ex.Message}");
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+        }
+        public async Task<Result<bool>> ImportarInformacionJson((string Path, bool Overwrite) data, CancellationToken cancellationToken = default)
+        {
+            SetBusy(true);
+            SetError(null);
+            try
+            {
+                var cmd = new ImportarInformacionCommand(data.Path, data.Overwrite);
+                var result = await _commandDispatcher.DispatchAsync<ImportarInformacionCommand, Result<bool>>(cmd, cancellationToken);
+                if (result.IsFailure)
+                {
+                    _logger.LogError("Error al importar la información desde el archivo '{Path}': {Error}", data.Path, result.Error);
+                    return Result<bool>.Failure($"Ha ocurrido un error al importar la información : {result.Error}");
+                }
+                return Result<bool>.Success(true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al importar la información desde el archivo '{FilePath}'", data.Path);
+                SetError($"Error al importar la información del archivo: {ex.Message}");
+                return Result<bool>.Failure($"Error al importar la información del archivo: {ex.Message}");
             }
             finally
             {

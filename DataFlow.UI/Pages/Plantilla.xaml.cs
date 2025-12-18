@@ -54,7 +54,7 @@ namespace DataFlow.UI.Pages
 
             try
             {
-                if (_viewModel.ItemCount == 0)
+                if (_viewModel.RefreshCommand.CanExecute(null))
                 {
                     _viewModel.RefreshCommand.Execute(null);
                 }

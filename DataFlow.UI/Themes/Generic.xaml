@@ -17,7 +17,6 @@
                             <ColumnDefinition Width="Auto"/>
                         </Grid.ColumnDefinitions>
 
-                        <!-- Fondo y contenido -->
                         <Border x:Name="back" Grid.Column="0" CornerRadius="8"
                             Padding="{TemplateBinding Padding}"
                             Background="Transparent" 
@@ -38,7 +37,6 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Divisor derecho -->
                         <Border x:Name="rightDivider"
                             Grid.Column="1"
                             Width="1"
@@ -166,6 +164,7 @@
                         </Trigger>
                         <Trigger Property="IsEnabled" Value="False">
                             <Setter Property="Opacity" Value="0.6"/>
+                            <Setter Property="Foreground" Value="#E5E7EB"/>
                             <Setter TargetName="border" Property="Background" Value="#F9FAFB"/>
                         </Trigger>
                     </ControlTemplate.Triggers>
