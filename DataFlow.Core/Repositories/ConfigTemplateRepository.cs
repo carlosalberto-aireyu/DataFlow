@@ -5,9 +5,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DataFlow.Core.Repository
 {
-    public class ConfigTemplateRepository : EFRepository<ConfigTemplate>, IConfigTemplateRepository
+    public class ConfigTemplateRepository_ : EFRepository<ConfigTemplate>, IConfigTemplateRepository
     {
-        public ConfigTemplateRepository(AppDbContext context) : base(context)
+        public ConfigTemplateRepository_(AppDbContext context) : base(context)
         {
         }
 

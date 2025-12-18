@@ -43,8 +43,6 @@ namespace DataFlow.Core.Extensions
             services.AddScoped<IParametroRepository, EFParametroRepository>();
             services.AddScoped<IHistProcessRepository, EFHistProcessRepository>();
 
-            services.AddScoped<IUnitOfWork, EFUnitOfWork>();
-
             services.AddScoped<ICommandDispatcher, CommandDispatcher>();
             services.AddScoped<IQueryDispatcher, QueryDispatcher>();
             services.AddScoped<IServiceScopeFactory>(sp => sp.GetRequiredService<IServiceProvider>() as IServiceScopeFactory ??

@@ -4,9 +4,9 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DataFlow.Core.Repositories
 {
-    public class ConfigColumnRepository : EFRepository<ConfigColumn>, IConfigColumnRepository
+    public class ConfigColumnRepository_ : EFRepository<ConfigColumn>, IConfigColumnRepository
     {
-        public ConfigColumnRepository(AppDbContext context) : base(context)
+        public ConfigColumnRepository_(AppDbContext context) : base(context)
         {}
 
         public async Task<IReadOnlyList<ConfigColumn>> GetByConfigTemplateIdAsync(

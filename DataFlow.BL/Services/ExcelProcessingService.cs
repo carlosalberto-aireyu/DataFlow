@@ -54,7 +54,19 @@ namespace DataFlow.BL.Services
                     break;
             }
         }
-
+        private bool IsFileLocked(string filePath)
+        {
+            try
+            {
+                using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.None);
+                stream.Close();
+            }
+            catch (IOException)
+            {
+                return true;
+            }
+            return false;
+        }
         public async Task<Result<string>> ProcessExcelFileAsync(
             string inputFilePath,
             string outputFilePath,
@@ -68,6 +80,11 @@ namespace DataFlow.BL.Services
                 {
                     Notify(ProcessNotificationLevel.Error, "El archivo de entrada no existe");
                     return Result<string>.Failure("El archivo de entrada no existe.");
+                }
+                if (IsFileLocked(inputFilePath))
+                {
+                    Notify(ProcessNotificationLevel.Error, "El archivo está abierto", "Cierre el archivo Excel antes de continuar.");
+                    return Result<string>.Failure("El archivo de Excel está siendo usado por otro proceso. Por favor, ciérrelo e intente nuevamente.");
                 }
 
                 if (templateConfig?.ConfigColumns == null || templateConfig.ConfigColumns.Count == 0)
