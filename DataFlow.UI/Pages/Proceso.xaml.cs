@@ -230,21 +230,24 @@ namespace DataFlow.UI.Pages
                     outputFilePath,
                     templateConfig);
 
+
                 _processMonitor.MarkAsCompleted();
-                //Guardamos historico de proceso
-                SaveHistProcess(templateConfig.Id, inputFilePath, outputFilePath, "success");
 
                 if (result.IsSuccess)
                 {
+                    SaveHistProcess(templateConfig.Id, inputFilePath, outputFilePath, "success");
                     ProcessStatusTextBlock.Text = "Proceso terminado exitosamente.";
                     ProcessStatusTextBlock.Foreground = Brushes.Green;
                     OutputPathTextBlock.Text = $"Archivo de salida: {result.Value}";
+
+
                     MessageBox.Show($"Archivo Excel procesado exitosamente y guardado en:\n{result.Value}", "Éxito", MessageBoxButton.OK, MessageBoxImage.Information);
                     
                     _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(result.Value!) { UseShellExecute = true });
                 }
                 else
                 {
+                    SaveHistProcess(templateConfig.Id, inputFilePath, outputFilePath, "Error");
                     ProcessStatusTextBlock.Text = $"Error durante el procesamiento: {result.Error}";
                     ProcessStatusTextBlock.Foreground = Brushes.Red;
                     MessageBox.Show($"Error al procesar el archivo Excel:\n{result.Error}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -252,6 +255,8 @@ namespace DataFlow.UI.Pages
             }
             catch (Exception ex)
             {
+                SaveHistProcess(templateConfig.Id, inputFilePath, outputFilePath, "Error");
+
                 ProcessStatusTextBlock.Text = $"Error inesperado durante el procesamiento: {ex.Message}";
                 ProcessStatusTextBlock.Foreground = Brushes.Red;
                 MessageBox.Show(ProcessStatusTextBlock.Text, "Error Crítico", MessageBoxButton.OK, MessageBoxImage.Error);
