@@ -81,10 +81,7 @@
                         Height="36"
                         IsCancel="True"
                         Click="CancelButton_Click"
-                        Foreground="#374151"
-                        Background="White"
-                        BorderBrush="#D1D5DB"
-                        BorderThickness="1"
+                        Style="{StaticResource CancelButtonStyle}"
                         Margin="0,0,8,0"/>
 
                 <Button x:Name="SaveButton"
@@ -93,9 +90,7 @@
                         Height="36"
                         IsDefault="True"
                         Click="SaveButton_Click"
-                        Foreground="White"
-                        Background="#3B82F6"
-                        BorderThickness="0"
+                        Style="{StaticResource PrimaryButtonStyle}"
                         Cursor="Hand"/>
             </StackPanel>
         </Grid>

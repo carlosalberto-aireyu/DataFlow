@@ -123,8 +123,7 @@ namespace DataFlow.BL.Services
         }
 
         private List<Dictionary<string, object>> ProcessExcelFile(
-            string inputFilePath,
-            ConfigTemplate templateConfig)
+                string inputFilePath, ConfigTemplate templateConfig)
         {
             var resultRows = new List<Dictionary<string, object>>();
 
@@ -152,77 +151,70 @@ namespace DataFlow.BL.Services
                 Notify(ProcessNotificationLevel.Info,
                     $"Columnas - Constantes: {constantColumns.Count}, Valores: {valueColumns.Count}, Dimensiones: {dimensionColumns.Count}");
 
-                // Constantes por Id de columna
+                // Leer CONSTANTES (valores fijos)
                 var constantValues = ReadConstantValues(worksheet, constantColumns);
 
-                // Columnas contenedoras: columnas de valor numéricas con rango horizontal
-                var contenedoraColumns = valueColumns.Where(IsContenedor).ToList();
+                // Determinar rango de procesamiento desde columnas de VALOR
+                var processingRange = DetermineProcessingRange(valueColumns);
+
+                if (processingRange == null)
+                {
+                    Notify(ProcessNotificationLevel.Warning, "No se encontró rango de procesamiento en columnas de valor");
+                    return resultRows;
+                }
+
                 Notify(ProcessNotificationLevel.Info,
-                    $"Columnas contenedoras detectadas: {contenedoraColumns.Count}");
+                    $"Rango de procesamiento detectado: Filas {processingRange.Value.FromRow} a {processingRange.Value.ToRow}");
 
-                // Índice de dimensiones por celda
+                // Preparar índice de DIMENSIONES (si existen)
                 var dimensionIndex = BuildDimensionIndex(dimensionColumns);
-
-                // Orden de prioridad de dimensiones
                 var dimensionOrder = DetermineDimensionOrder(dimensionColumns);
-
-                // Últimos valores válidos por columna (fill-forward), rellenar con lo ultimo que tiene
-                var lastValidValues = new Dictionary<int, object>();
 
                 // Columnas de salida ordenadas por IndexColumn
                 var orderedOutputColumns = templateConfig.ConfigColumns
                     .OrderBy(c => c.IndexColumn)
                     .ToList();
 
-                foreach (var contCol in contenedoraColumns)
+                // Detectar si hay columnas contenedoras (rangos horizontales multi-columna)
+                var contenedoraColumns = valueColumns.Where(IsContenedor).ToList();
+                bool hasContenedoras = contenedoraColumns.Any();
+
+                Notify(ProcessNotificationLevel.Info,
+                    hasContenedoras
+                        ? $"Modo: Procesamiento con {contenedoraColumns.Count} columnas contenedoras"
+                        : "Modo: Procesamiento fila por fila (sin columnas contenedoras)");
+
+                // Últimos valores válidos por columna 
+                var lastValidValues = new Dictionary<int, object>();
+
+                // Procesar según disponibilidad de columnas contenedoras
+                if (hasContenedoras)
                 {
-                    foreach (var range in contCol.Ranges ?? Enumerable.Empty<ColumnRange>())
-                    {
-                        var fromAddr = ParseCellAddress(range.RFrom!);
-                        var toAddr = ParseCellAddress(range.RTo!);
-
-                        Notify(ProcessNotificationLevel.Info,
-                            $"Procesando rango contenedor {range.RFrom} a {range.RTo} para columna '{contCol.Name}'");
-
-                        for (int row = fromAddr.Row; row <= toAddr.Row; row++)
-                        {
-                            // Valores de contexto para esta fila
-                            var contextValues = ReadContextValuesForRow(
-                                worksheet, row, valueColumns, contCol, lastValidValues);
-
-                            var prodTotalRow = BuildProductionTotalRow(
-                                contextValues, constantValues, templateConfig, orderedOutputColumns);
-
-
-                            if (prodTotalRow != null)
-                            {
-                                resultRows.Add(prodTotalRow);
-                            }
-
-                            // Celdas dentro del rango
-                            for (int col = fromAddr.Col; col <= toAddr.Col; col++)
-                            {
-                                var cell = worksheet.Cell(row, col);
-
-                                if (!cell.TryGetValue(out double cellValue) || cellValue == 0)
-                                    continue;
-
-                                var applicableDims = GetOrderedDimensionsForCell(
-                                    row, col, dimensionIndex, dimensionOrder);
-
-                                var outputRow = BuildOutputRow(
-                                    cellValue,
-                                    contCol,
-                                    contextValues,
-                                    applicableDims,
-                                    constantValues,
-                                    templateConfig,
-                                    orderedOutputColumns);
-
-                                resultRows.Add(outputRow);
-                            }
-                        }
-                    }
+                    //Con columnas contenedoras (celda por celda + dimensiones)
+                    resultRows = ProcessWithContenedoras(
+                        worksheet,
+                        contenedoraColumns,
+                        valueColumns,
+                        constantValues,
+                        dimensionIndex,
+                        dimensionOrder,
+                        templateConfig,
+                        orderedOutputColumns,
+                        lastValidValues);
+                }
+                else
+                {
+                    // Sin contenedoras (fila por fila)
+                    resultRows = ProcessRowByRow(
+                        worksheet,
+                        processingRange.Value,
+                        valueColumns,
+                        constantValues,
+                        dimensionIndex,
+                        dimensionOrder,
+                        templateConfig,
+                        orderedOutputColumns,
+                        lastValidValues);
                 }
 
                 Notify(ProcessNotificationLevel.Info,
@@ -237,6 +229,267 @@ namespace DataFlow.BL.Services
             }
 
             return resultRows;
+        }
+
+        // Determinar el rango de filas a procesar basado en todas las columnas de valor
+        private (int FromRow, int ToRow)? DetermineProcessingRange(List<ConfigColumn> valueColumns)
+        {
+            if (!(valueColumns.Count > 0) || valueColumns.All(c => c.Ranges == null || !c.Ranges.Any()))
+                return null;
+
+            int minRow = int.MaxValue;
+            int maxRow = int.MinValue;
+
+            foreach (var col in valueColumns)
+            {
+                if (col.Ranges == null) continue;
+
+                foreach (var range in col.Ranges)
+                {
+                    var from = ParseCellAddress(range.RFrom!);
+                    var to = ParseCellAddress(range.RTo!);
+
+                    minRow = Math.Min(minRow, from.Row);
+                    maxRow = Math.Max(maxRow, to.Row);
+                }
+            }
+
+            if (minRow == int.MaxValue || maxRow == int.MinValue)
+                return null;
+
+            return (minRow, maxRow);
+        }
+
+        // Procesamiento columnas contenedoras
+        private List<Dictionary<string, object>> ProcessWithContenedoras(
+            IXLWorksheet worksheet,
+            List<ConfigColumn> contenedoraColumns,
+            List<ConfigColumn> valueColumns,
+            Dictionary<int, object> constantValues,
+            Dictionary<(int row, int col), List<(ConfigColumn Column, ColumnRange Range)>> dimensionIndex,
+            List<ConfigColumn> dimensionOrder,
+            ConfigTemplate templateConfig,
+            List<ConfigColumn> orderedOutputColumns,
+            Dictionary<int, object> lastValidValues)
+        {
+            var resultRows = new List<Dictionary<string, object>>();
+
+            foreach (var contCol in contenedoraColumns)
+            {
+                foreach (var range in contCol.Ranges ?? Enumerable.Empty<ColumnRange>())
+                {
+                    var fromAddr = ParseCellAddress(range.RFrom!);
+                    var toAddr = ParseCellAddress(range.RTo!);
+
+                    Notify(ProcessNotificationLevel.Info,
+                        $"Procesando rango contenedor {range.RFrom} a {range.RTo} para columna '{contCol.Name}'");
+
+                    for (int row = fromAddr.Row; row <= toAddr.Row; row++)
+                    {
+                        // Leer valores de contexto para esta fila
+                        var contextValues = ReadContextValuesForRow(
+                            worksheet, row, valueColumns, contCol, lastValidValues);
+
+                        // Generar fila totalizadora si aplica
+                        var prodTotalRow = BuildProductionTotalRow(
+                            contextValues, constantValues, templateConfig, orderedOutputColumns);
+
+                        if (prodTotalRow != null)
+                        {
+                            resultRows.Add(prodTotalRow);
+                        }
+
+                        // Procesar cada celda dentro del rango horizontal
+                        for (int col = fromAddr.Col; col <= toAddr.Col; col++)
+                        {
+                            var cell = worksheet.Cell(row, col);
+
+                            if (!cell.TryGetValue(out double cellValue) || cellValue == 0)
+                                continue;
+
+                            var applicableDims = GetOrderedDimensionsForCell(
+                                row, col, dimensionIndex, dimensionOrder);
+
+                            var outputRow = BuildOutputRow(
+                                cellValue,
+                                contCol,
+                                contextValues,
+                                applicableDims,
+                                constantValues,
+                                templateConfig,
+                                orderedOutputColumns);
+
+                            resultRows.Add(outputRow);
+                        }
+                    }
+                }
+            }
+
+            return resultRows;
+        }
+
+        // Procesamiento SIN columnas contenedoras (fila por fila)
+        private List<Dictionary<string, object>> ProcessRowByRow(
+            IXLWorksheet worksheet,
+            (int FromRow, int ToRow) processingRange,
+            List<ConfigColumn> valueColumns,
+            Dictionary<int, object> constantValues,
+            Dictionary<(int row, int col), List<(ConfigColumn Column, ColumnRange Range)>> dimensionIndex,
+            List<ConfigColumn> dimensionOrder,
+            ConfigTemplate templateConfig,
+            List<ConfigColumn> orderedOutputColumns,
+            Dictionary<int, object> lastValidValues)
+        {
+            var resultRows = new List<Dictionary<string, object>>();
+
+            Notify(ProcessNotificationLevel.Info,
+                $"Procesando fila por fila desde {processingRange.FromRow} hasta {processingRange.ToRow}");
+
+            for (int row = processingRange.FromRow; row <= processingRange.ToRow; row++)
+            {
+                // Leer todos los valores de esta fila
+                var rowValues = new Dictionary<int, object>();
+                bool hasValidData = false;
+
+                foreach (var col in valueColumns)
+                {
+                    if (col.Ranges == null || !col.Ranges.Any()) continue;
+
+                    foreach (var range in col.Ranges)
+                    {
+                        var from = ParseCellAddress(range.RFrom!);
+                        var to = ParseCellAddress(range.RTo!);
+
+                        // Verificar si esta fila está dentro del rango de esta columna
+                        if (row < from.Row || row > to.Row)
+                            continue;
+
+                        object cellValue = GetDefaultValue(col, range);
+
+                        // Leer valor(es) de esta fila en el rango de columnas
+                        for (int c = from.Col; c <= to.Col; c++)
+                        {
+                            var cell = worksheet.Cell(row, c);
+                            var candidate = ReadCellValue(cell, col);
+
+                            if (!IsEmptyValue(candidate, col.DataTypeId))
+                            {
+                                cellValue = candidate;
+                                hasValidData = true;
+                                break;
+                            }
+                        }
+
+                        // Aplicar valor ultimo si la celda está vacía
+                        if (IsEmptyValue(cellValue, col.DataTypeId))
+                        {
+                            if (lastValidValues.TryGetValue(col.Id, out var lastVal))
+                            {
+                                cellValue = lastVal;
+                            }
+                        }
+                        else
+                        {
+                            lastValidValues[col.Id] = cellValue;
+                        }
+
+                        rowValues[col.Id] = cellValue;
+                        break; // Solo procesar el primer rango que aplique
+                    }
+                }
+
+                // Solo generar fila si tiene datos válidos
+                if (!hasValidData)
+                    continue;
+
+                // Obtener dimensiones aplicables para esta fila
+                var applicableDims = GetDimensionsForRow(
+                    worksheet, row, dimensionIndex, dimensionOrder, valueColumns);
+
+                // Construir fila de salida
+                var outputRow = BuildOutputRowFromValues(
+                    rowValues,
+                    applicableDims,
+                    constantValues,
+                    templateConfig,
+                    orderedOutputColumns);
+
+                resultRows.Add(outputRow);
+            }
+
+            return resultRows;
+        }
+
+        // Obtener dimensiones aplicables para una fila completa
+        private List<(ConfigColumn Column, ColumnRange Range)> GetDimensionsForRow(
+            IXLWorksheet worksheet,
+            int row,
+            Dictionary<(int row, int col), List<(ConfigColumn Column, ColumnRange Range)>> dimensionIndex,
+            List<ConfigColumn> dimensionOrder,
+            List<ConfigColumn> valueColumns)
+        {
+            // Intentar obtener dimensiones desde la primera celda de valor en esta fila
+            var firstValueCol = valueColumns.FirstOrDefault(c => c.Ranges?.Any() == true);
+            if (firstValueCol?.Ranges == null)
+                return new List<(ConfigColumn, ColumnRange)>();
+
+            var firstRange = firstValueCol.Ranges.First();
+            var firstColAddr = ParseCellAddress(firstRange.RFrom!);
+
+            return GetOrderedDimensionsForCell(row, firstColAddr.Col, dimensionIndex, dimensionOrder);
+        }
+
+        // Construir fila de salida desde valores leídos (sin columna contenedora)
+        private Dictionary<string, object> BuildOutputRowFromValues(
+            Dictionary<int, object> rowValues,
+            List<(ConfigColumn Column, ColumnRange Range)> dimensions,
+            Dictionary<int, object> constantValues,
+            ConfigTemplate templateConfig,
+            List<ConfigColumn> orderedOutputColumns)
+        {
+            var row = new Dictionary<string, object>();
+
+            foreach (var column in orderedOutputColumns)
+            {
+                var columnName = column.NameDisplay ?? column.Name ?? $"Column_{column.IndexColumn}";
+                object? value;
+
+                if (column.ColumnTypeId == _lookupIds.Constante)
+                {
+                    // CONSTANTES: usar valores leídos al inicio
+                    value = constantValues.TryGetValue(column.Id, out var v)
+                        ? v
+                        : GetDefaultValue(column, null);
+                }
+                else if (column.ColumnTypeId == _lookupIds.Valor)
+                {
+                    // VALORES: usar valores leídos de la fila
+                    value = rowValues.TryGetValue(column.Id, out var v)
+                        ? v
+                        : GetDefaultValue(column, null);
+                }
+                else if (column.ColumnTypeId == _lookupIds.Dimension)
+                {
+                    // DIMENSIONES: usar valores del índice de dimensiones
+                    var applicable = dimensions.FirstOrDefault(d => d.Column.Id == column.Id);
+                    if (applicable.Column != null && !string.IsNullOrEmpty(applicable.Range.DefaultValue))
+                    {
+                        value = applicable.Range.DefaultValue;
+                    }
+                    else
+                    {
+                        value = GetDefaultValue(column, null);
+                    }
+                }
+                else
+                {
+                    value = column.DataTypeId == _lookupIds.Numerico ? 0.0 : string.Empty;
+                }
+
+                row[columnName] = value ?? string.Empty;
+            }
+
+            return row;
         }
 
         #region Helpers: detección contenedora, indexado dimensiones y orden
@@ -374,7 +627,7 @@ namespace DataFlow.BL.Services
 
             foreach (var column in constantColumns)
             {
-                if (column.Ranges?.Any() == true)
+                if (column.Ranges?.Count > 0)
                 {
                     var range = column.Ranges.First();
                     var cellAddress = ParseCellAddress(range.RFrom!);
@@ -738,7 +991,7 @@ namespace DataFlow.BL.Services
 
         private (int Row, int Col) ParseCellAddress(string cellAddress)
         {
-            var match = Regex.Match(cellAddress.ToUpper(), @"^([A-Z]+)(\d+)$");
+            var match = Regex.Match(input: cellAddress.ToUpperInvariant(), pattern: @"^([A-Z]+)(\d+)$");
 
             if (!match.Success)
                 throw new ArgumentException($"Dirección de celda inválida: {cellAddress}");
