@@ -13,6 +13,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" Margin="0,0,0,8" >
@@ -138,6 +139,11 @@
                         Tag="M17,3 L21,7 L7,21 L3,21 L3,17 L17,3"/> -->
 
                     <Button Style="{StaticResource IconOnlyButtonStyle}"
+                        Click="ChangeColumnReferenceButton_Click"
+                        ToolTip="Cambiar Columna Excel"
+                        Tag="M3,7 L21,7 M3,12 L21,12 M3,17 L21,17 M0,3 L3,6 L0,9 M24,3 L21,6 L24,9"/>
+
+                    <Button Style="{StaticResource IconOnlyButtonStyle}"
                         ToolTip="Eliminar Rango"
                         Click="DeleteRangeButton_Click"
                         Tag="M3,6 H21 M8,6 V4 H16 V6 M19,6 V20 C19,21 18,22 17,22 H7 C6,22 5,21 5,20 V6 M10,11 V17 M14,11 V17"/>
@@ -179,7 +185,7 @@
         </Grid>
 
 
-        <TextBlock Grid.Row="1"
+        <TextBlock Grid.Row="2"
            Text="{Binding ErrorMessage}"
            Foreground="#DC2626"
            Visibility="{Binding ErrorMessage, Converter={StaticResource StringToVisibilityConverter}}"

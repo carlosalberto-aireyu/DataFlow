@@ -561,5 +561,51 @@ namespace DataFlow.UI.Services
                 SetBusy(false);
             }
         }
+ 
+        public async Task<Result<ConfigColumn>> ChangeColumnReferenceAsync(
+            ChangeColumnReferenceCommand cmd,
+            CancellationToken cancellationToken = default)
+        {
+            SetBusy(true);
+            SetError(null);
+            try
+            {
+                _logger.LogInformation(
+                    "Cambiando referencias de columna {ColumnId} a {NewColumn}",
+                    cmd.ConfigColumnId,
+                    cmd.NewColumnLetter);
+
+                var result = await _commandDispatcher.DispatchAsync<ChangeColumnReferenceCommand, Result<ConfigColumn>>(
+                    cmd, cancellationToken);
+
+                if (result.IsSuccess && result.Value != null)
+                {
+                    await LoadByIdAsync(result.Value.Id, cancellationToken);
+                    _logger.LogInformation("Referencias cambiadas exitosamente para columna {ColumnId}", result.Value.Id);
+                }
+                else
+                {
+                    SetError(result.Error ?? "Error desconocido al cambiar referencias.");
+                }
+
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Cambio de referencias cancelado");
+                SetError("Operación cancelada");
+                return Result<ConfigColumn>.Failure("Operación cancelada");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al cambiar referencias de columna");
+                SetError($"Error al cambiar referencias: {ex.Message}");
+                return Result<ConfigColumn>.Failure(ex.Message);
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+        }
     }
 }

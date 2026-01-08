@@ -29,5 +29,7 @@ namespace DataFlow.UI.Services
         Task<Result<bool>> DeleteRangeAsync(DeleteColumnRangeCommand cmd, CancellationToken cancellationToken = default);
 
         Task<Result<ConfigColumn>> CopyColumnAsync(CopyConfigColumnCommand cmd, CancellationToken cancellationToken = default);
+
+        Task<Result<ConfigColumn>> ChangeColumnReferenceAsync(ChangeColumnReferenceCommand cmd, CancellationToken cancellationToken = default);
     }
 }

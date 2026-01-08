@@ -1,4 +1,10 @@
-﻿using System;
+﻿using DataFlow.Core.Features.Commands;
+using DataFlow.UI.Commands;
+using DataFlow.UI.Pages;
+using DataFlow.UI.Services;
+using DataFlow.UI.ViewModels.Base;
+using Microsoft.Extensions.Logging;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -6,11 +12,6 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Input;
-using DataFlow.Core.Features.Commands;
-using DataFlow.UI.Commands;
-using DataFlow.UI.ViewModels.Base;
-using DataFlow.UI.Services;
-using Microsoft.Extensions.Logging;
 
 namespace DataFlow.UI.ViewModels
 {
@@ -117,6 +118,7 @@ namespace DataFlow.UI.ViewModels
         public ICommand DeleteRangeCommand { get; }
         public ICommand ClearFilterCommand { get; }
         public ICommand CopyColumnCommand { get; }
+        public ICommand ChangeColumnReferenceCommand { get; }
 
         #endregion
 
@@ -158,6 +160,7 @@ namespace DataFlow.UI.ViewModels
             DeleteRangeCommand = new AsyncRelayCommand(DeleteSelectedRangeAsync);
             ClearFilterCommand = new RelayCommand(ClearFilter);
             CopyColumnCommand = new AsyncRelayCommand(CopySelectedColumn);
+            ChangeColumnReferenceCommand = new AsyncRelayCommand<string>(ChangeColumnReferenceAsync);
 
             _logger.LogInformation("ConfigColumnsViewModel inicializado");
         }
@@ -204,6 +207,45 @@ namespace DataFlow.UI.ViewModels
         #endregion
 
         #region Métodos (Async)
+
+        private async Task ChangeColumnReferenceAsync(string? newColumnLetter, CancellationToken cancellationToken)
+        {
+            if (SelectedColumn == null)
+            {
+                _logger.LogWarning("Intento de cambiar referencias sin columna seleccionada");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(newColumnLetter))
+            {
+                _logger.LogWarning("Nueva columna vacía");
+                return;
+            }
+
+            try
+            {
+                _logger.LogInformation(
+                    "Cambiando referencias de columna {ColumnId} a {NewColumn}",
+                    SelectedColumn.Id,
+                    newColumnLetter);
+
+                var command = new ChangeColumnReferenceCommand(SelectedColumn.Id, newColumnLetter);
+                var result = await _manager.ChangeColumnReferenceAsync(command, cancellationToken);
+
+                if (result.IsSuccess)
+                {
+                    _logger.LogInformation("Referencias cambiadas a columna {NewColumn}", newColumnLetter);
+                }
+                else
+                {
+                    _logger.LogWarning("Error al cambiar referencias: {Error}", result.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error en ChangeColumnReferenceAsync");
+            }
+        }
 
         private async Task RefreshAsync(CancellationToken cancellationToken)
         {

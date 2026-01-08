@@ -92,6 +92,7 @@ namespace DataFlow.Core.Extensions
             services.AddScoped<ICommandHandler<CreateColumnRangeCommand, Result<ColumnRange>>, CreateColumnRangeCommandHandler>();
             services.AddScoped<ICommandHandler<UpdateColumnRangeCommand, Result<ColumnRange>>, UpdateColumnRangeCommandHandler>();
             services.AddScoped<ICommandHandler<DeleteColumnRangeCommand, Result<bool>>, DeleteColumnRangeCommandHandler>();
+            services.AddScoped<ICommandHandler<ChangeColumnReferenceCommand, Result<ConfigColumn>>, ChangeColumnReferenceCommandHandler>();
 
             services.AddScoped<ICommandHandler<CreateParametroCommand, Result<Parametro>>, CreateParametroCommandHandler>();
             services.AddScoped<ICommandHandler<UpdateParametroCommand, Result<Parametro>>, UpdateParametroCommandHandler>();

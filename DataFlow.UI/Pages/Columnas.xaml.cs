@@ -1,4 +1,5 @@
 ﻿using DataFlow.Core.Constants;
+using DataFlow.Core.Features.Commands;
 using DataFlow.UI.Commands;
 using DataFlow.UI.Helpers;
 using DataFlow.UI.Services;
@@ -829,6 +830,66 @@ namespace DataFlow.UI.Pages
                     range.RTo = null;
                     range.DefaultValue = null;
                     range.Id = 0;
+                }
+            }
+        }
+
+        private async void ChangeColumnReferenceButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedColumn == null)
+            {
+                MessageBox.Show(
+                    "Debe seleccionar una columna para cambiar su referencia Excel.",
+                    "Advertencia",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+                return;
+            }
+
+            var dialog = new CambiarColumnaExcelDialog
+            {
+                Owner = Window.GetWindow(this)
+            };
+
+            if (dialog.ShowDialog() == true && !string.IsNullOrWhiteSpace(dialog.NewColumnLetter))
+            {
+                try
+                {
+                    if (_viewModel.ChangeColumnReferenceCommand is IAsyncCommand<string> asyncCmd)
+                    {
+                        await asyncCmd.ExecuteAsync(dialog.NewColumnLetter);
+                    }
+                    else
+                    {
+                        _viewModel.ChangeColumnReferenceCommand.Execute(dialog.NewColumnLetter);
+                    }
+
+                    await Task.Delay(100);
+
+                    if (!string.IsNullOrWhiteSpace(_viewModel.ErrorMessage))
+                    {
+                        MessageBox.Show(
+                            _viewModel.ErrorMessage,
+                            "Error al cambiar referencia",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Error);
+                    }
+                    else
+                    {
+                        MessageBox.Show(
+                            $"Referencias cambiadas exitosamente a columna '{dialog.NewColumnLetter}'",
+                            "Éxito",
+                            MessageBoxButton.OK,
+                            MessageBoxImage.Information);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        $"Error al cambiar referencias: {ex.Message}",
+                        "Error",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
                 }
             }
         }
