@@ -524,5 +524,42 @@ namespace DataFlow.UI.Services
                 SetBusy(false);
             }
         }
+
+        public async Task<Result<ConfigColumn>> CopyColumnAsync(CopyConfigColumnCommand cmd, CancellationToken cancellationToken = default)
+        {
+            SetBusy(true);
+            SetError(null);
+            try
+            {
+                _logger.LogInformation("Eliminando rango: {Id}", cmd.Id);
+                var result = await _commandDispatcher.DispatchAsync<CopyConfigColumnCommand, Result<ConfigColumn>>(
+                        cmd, cancellationToken);
+                if (result.IsSuccess && result.Value != null)
+                {
+                    await LoadByIdAsync(result.Value.Id, cancellationToken);
+                }
+                else
+                {
+                    SetError(result.Error ?? "Error desconocido al copiar la columna.");
+                }
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Copia de columna cancelada");
+                SetError("Operación cancelada");
+                return Result<ConfigColumn>.Failure("Operación cancelada");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error al copiar columna");
+                SetError($"Error al copiar columna: {ex.Message}");
+                return Result<ConfigColumn>.Failure(ex.Message);
+            }
+            finally
+            {
+                SetBusy(false);
+            }
+        }
     }
 }

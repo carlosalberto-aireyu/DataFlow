@@ -87,6 +87,7 @@ namespace DataFlow.Core.Extensions
             services.AddScoped<ICommandHandler<CreateConfigColumnCommand, Result<ConfigColumn>>, CreateConfigColumnCommandHandler>();
             services.AddScoped<ICommandHandler<UpdateConfigColumnCommand, Result<ConfigColumn>>, UpdateConfigColumnCommandHandler>();
             services.AddScoped<ICommandHandler<DeleteConfigColumnCommand, Result<bool>>, DeleteConfigColumnCommandHandler>();
+            services.AddScoped<ICommandHandler<CopyConfigColumnCommand, Result<ConfigColumn>>, CopyConfigColumnCommandHandler>();
 
             services.AddScoped<ICommandHandler<CreateColumnRangeCommand, Result<ColumnRange>>, CreateColumnRangeCommandHandler>();
             services.AddScoped<ICommandHandler<UpdateColumnRangeCommand, Result<ColumnRange>>, UpdateColumnRangeCommandHandler>();

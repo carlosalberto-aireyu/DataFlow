@@ -116,6 +116,7 @@ namespace DataFlow.UI.ViewModels
         public ICommand EditRangeCommand { get; }
         public ICommand DeleteRangeCommand { get; }
         public ICommand ClearFilterCommand { get; }
+        public ICommand CopyColumnCommand { get; }
 
         #endregion
 
@@ -156,6 +157,7 @@ namespace DataFlow.UI.ViewModels
             EditRangeCommand = new AsyncRelayCommand(EditSelectedRangeAsync);
             DeleteRangeCommand = new AsyncRelayCommand(DeleteSelectedRangeAsync);
             ClearFilterCommand = new RelayCommand(ClearFilter);
+            CopyColumnCommand = new AsyncRelayCommand(CopySelectedColumn);
 
             _logger.LogInformation("ConfigColumnsViewModel inicializado");
         }
@@ -201,7 +203,8 @@ namespace DataFlow.UI.ViewModels
 
         #endregion
 
-        #region Métodos Públicos (Async)
+        #region Métodos (Async)
+
         private async Task RefreshAsync(CancellationToken cancellationToken)
         {
             try
@@ -236,7 +239,46 @@ namespace DataFlow.UI.ViewModels
                 _logger.LogError(ex, "Error cargando columna {Id}", id);
             }
         }
+        private async Task CopySelectedColumn(CancellationToken cancellationToken)
+        {
+            if (_selectedColumn == null)
+            {
+                _logger.LogWarning("Intento de copiar sin columna seleccionada");
+                return;
+            }
+            if (_selectedColumn.Id == 0)
+            {
+                _logger.LogWarning("Intento de copiar columna no valida");
+                return;
 
+            }
+            try
+            {
+                
+                
+                _logger.LogInformation("Copiando columna con Id {Id}", _selectedColumn.Id);
+
+                var columnToCopy = new CopyConfigColumnCommand(_selectedColumn.Id);
+
+                var result = await _manager.CopyColumnAsync(columnToCopy, cancellationToken);
+                if (result.IsSuccess)
+                {
+                    _logger.LogInformation("Columna copiada exitosamente con Id {Id}", result.Value?.Id);
+                }
+                else
+                {
+                    _logger.LogWarning("Error al copiar columna: {Error}", result.Error);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Copia cancelada para Id {Id}", _selectedColumn.Id);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error copiando columna {Id}", _selectedColumn.Id);
+            }
+        }
         private async Task CreateAsync(dynamic? columnData, CancellationToken cancellationToken)
         {
             try
