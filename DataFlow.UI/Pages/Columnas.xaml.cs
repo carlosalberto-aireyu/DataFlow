@@ -250,6 +250,40 @@ namespace DataFlow.UI.Pages
             }
         }
 
+        private async void CopyColumnButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (_viewModel.SelectedColumn == null || _viewModel.SelectedColumn.Id == 0)
+            {
+                MessageBox.Show("Debe seleccionar una columna para copiar.", "Advertencia", MessageBoxButton.OK, MessageBoxImage.Warning);
+                return;
+            }
+            try
+            {
+                if (_viewModel.CopyColumnCommand is IAsyncCommand asyncCmd)
+                    {
+                        await asyncCmd.ExecuteAsync(null);
+                    }
+                    else
+                    {
+                        _viewModel.CopyColumnCommand.Execute(null);
+                    }
+                    await Task.Delay(100);
+             
+                if (!string.IsNullOrWhiteSpace(_viewModel.ErrorMessage))
+                {
+                    MessageBox.Show(
+                        _viewModel.ErrorMessage,
+                        "Error al copiar columna",
+                        MessageBoxButton.OK,
+                        MessageBoxImage.Error);
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error copiando la columna: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
+        }
+
         private async void EditColumnButton_Click(object sender, RoutedEventArgs e)
         {
             if (_viewModel.SelectedColumn == null)
