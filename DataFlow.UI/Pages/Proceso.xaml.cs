@@ -134,6 +134,18 @@ namespace DataFlow.UI.Pages
 
         private async void StartProcessButton_Click(object sender, RoutedEventArgs e)
         {
+            if (AlphaVersionService.IsExpired)
+            {
+                ProcessStatusTextBlock.Text = "Error: La versión ALPHA ha expirado.";
+                ProcessStatusTextBlock.Foreground = Brushes.Red;
+                MessageBox.Show(
+                    AlphaVersionService.GetExpiryMessage(),
+                    "Versión ALPHA Expirada",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Stop);
+                return;
+            }
+
             _processMonitor.Clear();
             _appStateService.NotificationsProcess.Clear();
 

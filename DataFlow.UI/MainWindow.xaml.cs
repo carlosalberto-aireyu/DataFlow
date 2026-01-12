@@ -1,6 +1,8 @@
-﻿using DataFlow.UI.ViewModels;
+﻿using DataFlow.UI.Services;
+using DataFlow.UI.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace DataFlow.UI
 {
@@ -13,6 +15,8 @@ namespace DataFlow.UI
             InitializeComponent();
             this.WindowStartupLocation = WindowStartupLocation.CenterScreen;
 
+            this.Title = $"{AlphaVersionService.GetVersionInfo()}";
+            DisclaimerTextBlock.Text = $"{AlphaVersionService.GetVersionInfo()} | Importante: Este software se encuentra en fase ALPHA y puede contener errores. Los datos obtenidos deben ser revisados por el usuario. Este programa es propiedad exclusiva de Repsol y está destinado únicamente para uso interno. Este software no debe ser distribuido, copiado, modificado o utilizado fuera del ámbito corporativo © Repsol";
             _serviceProvider = serviceProvider;
             Loaded += MainWindow_Loaded;
             

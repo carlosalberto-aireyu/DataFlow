@@ -22,13 +22,17 @@ namespace DataFlow.Core.Features.Queries.Handlers
             {
                 _logger.LogInformation("Obteniendo todas las plantillas de configuración.");
                 var templates = await _configTemplateRepository.GetAllAsync(cancellationToken);
-                if (templates is null || !templates.Any())
+                if (templates is null || templates.Count <= 0)
                 {
                     _logger.LogWarning("No se encontraron plantillas de configuración.");
                     return Result<IReadOnlyList<ConfigTemplate>>.Success(templates ?? new List<ConfigTemplate>());
                 }
+                
+                var sorted = templates.OrderByDescending(t => t.CreatedAt).ToList();
+                
+
                 _logger.LogInformation("Se obtuvieron {Count} plantillas", templates.Count);
-                return Result<IReadOnlyList<ConfigTemplate>>.Success(templates);
+                return Result<IReadOnlyList<ConfigTemplate>>.Success(sorted);
             }
             catch (Exception ex)
             {

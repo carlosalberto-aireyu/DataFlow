@@ -26,12 +26,25 @@ namespace DataFlow.UI
         public IServiceProvider Services => _host?.Services
             ?? throw new InvalidOperationException("El host no está inicializado.");
 
+
         protected override async void OnStartup(StartupEventArgs e)
         {
+            if (AlphaVersionService.IsExpired)
+            {
+                MessageBox.Show(
+                    AlphaVersionService.GetExpiryMessage(),
+                    "Versión ALPHA Expirada",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Stop);
+                Shutdown();
+                return;
+            }
 
             base.OnStartup(e);
 
-            _host = Host.CreateDefaultBuilder()
+            try
+            {
+                _host = Host.CreateDefaultBuilder()
                 .ConfigureAppConfiguration((context, config) =>
                 {
                     config.SetBasePath(Directory.GetCurrentDirectory());
@@ -42,20 +55,28 @@ namespace DataFlow.UI
                     ConfigureServices(services, hostContext.Configuration);
                 })
                 .Build();
-            _logger = _host.Services.GetService<ILogger<App>>();
-            _logger?.LogInformation("=== Aplicación iniciándose ==="); // Log de inicio
-            await _host.StartAsync();
+                _logger = _host.Services.GetService<ILogger<App>>();
+                _logger?.LogInformation("=== Aplicación iniciándose ==="); // Log de inicio
+                await _host.StartAsync();
 
-            var initializer = _host.Services.GetRequiredService<IDatabaseInitializer>();
-            await initializer.InitializeAsync();
+                var initializer = _host.Services.GetRequiredService<IDatabaseInitializer>();
+                await initializer.InitializeAsync();
 
-            var mainWindow = _host.Services.GetRequiredService<MainWindow>();
+                var mainWindow = _host.Services.GetRequiredService<MainWindow>();
 
-            var appStateService = Services.GetRequiredService<IApplicationStateService>();
-            await appStateService.RefreshParametros();
+                var appStateService = Services.GetRequiredService<IApplicationStateService>();
+                await appStateService.RefreshParametros();
 
 
-            mainWindow.Show();
+                mainWindow.Show();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Error al iniciar la aplicación: {ex.Message}", "Error de Inicio", MessageBoxButton.OK, MessageBoxImage.Error);
+                Shutdown();
+            }
+
+                
 
         }
 
@@ -103,38 +124,25 @@ namespace DataFlow.UI
 
 
         }
-
+        
         protected override void OnExit(ExitEventArgs e)
         {
-            _logger?.LogInformation("=== Aplicación cerrando ===");
+            System.Diagnostics.Debug.WriteLine("=== [APP EXIT] Iniciando limpieza de servicios ===");
 
             try
             {
-                if (_host != null)
-                {
-                    _logger?.LogInformation("Deteniendo host...");
-
-                    Task.Run(() => _host.StopAsync(TimeSpan.FromSeconds(3))).Wait(TimeSpan.FromSeconds(4));
-
-                    _logger?.LogInformation("Host detenido correctamente o el tiempo de espera se agotó");
-                }
-            }
-            catch (OperationCanceledException)
-            {
-                _logger?.LogWarning("Timeout al detener el host");
+                _host?.Dispose();
+                System.Diagnostics.Debug.WriteLine("[APP EXIT] Host disponible correctamente");
             }
             catch (Exception ex)
             {
-                _logger?.LogError(ex, "Error al detener host");
+                System.Diagnostics.Debug.WriteLine($"[APP EXIT] Error disponiendo host: {ex.Message}");
             }
             finally
             {
-                _logger?.LogInformation("Liberando recursos del host");
-                _host?.Dispose();
-                _logger?.LogInformation("Host deshechado.");
+                System.Diagnostics.Debug.WriteLine("[APP EXIT] Terminando aplicación con Environment.Exit(0)");
+                System.Environment.Exit(0);
             }
-
-            base.OnExit(e);
         }
     }
 }

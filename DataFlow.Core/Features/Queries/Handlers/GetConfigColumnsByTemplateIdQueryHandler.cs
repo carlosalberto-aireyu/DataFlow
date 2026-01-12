@@ -39,7 +39,7 @@ namespace DataFlow.Core.Features.Queries.Handlers
                 .GetByIdAsync(query.ConfigTemplateId);
             if(column is null)
             {
-                _logger.LogError("ConfigTemplate with Id {ConfigTemplateId} not found", query.ConfigTemplateId);
+                _logger.LogError("ConfigTemplate con Id {ConfigTemplateId} no se existe", query.ConfigTemplateId);
                 return Result<IReadOnlyList<ConfigColumn>>.Failure($"No se encontró la plantilla de configuración con Id {query.ConfigTemplateId}");
             }
 

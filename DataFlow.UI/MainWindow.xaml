@@ -15,6 +15,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="60"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
         <Border Grid.Row="0" Background="#F7F7F7">
             <DockPanel LastChildFill="False" VerticalAlignment="Center" Margin="10,0,10,0">
@@ -76,5 +77,14 @@
             Grid.Row="1"
             x:Name="navFrame" 
             Background="#F7F7F7"/>
+
+        <Border Grid.Row="2" Background="#FDF0E8" Padding="10,8" BorderBrush="#E6E6E6" BorderThickness="1,0,0,0">
+            <TextBlock x:Name="DisclaimerTextBlock"
+               FontSize="11"
+               Foreground="#666666"
+               TextAlignment="Center"
+               TextWrapping="Wrap"
+               HorizontalAlignment="Stretch"/>
+        </Border>
     </Grid>
 </Window>
