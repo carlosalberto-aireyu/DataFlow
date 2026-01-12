@@ -54,6 +54,7 @@ namespace DataFlow.BL.Services
                     break;
             }
         }
+
         private bool IsFileLocked(string filePath)
         {
             try
@@ -67,6 +68,7 @@ namespace DataFlow.BL.Services
             }
             return false;
         }
+
         public async Task<Result<string>> ProcessExcelFileAsync(
             string inputFilePath,
             string outputFilePath,
@@ -190,7 +192,7 @@ namespace DataFlow.BL.Services
                 // Procesar según disponibilidad de columnas contenedoras
                 if (hasContenedoras)
                 {
-                    //Con columnas contenedoras (celda por celda + dimensiones)
+                    // CAMBIO: Con columnas contenedoras - solo procesa celdas con dimensiones
                     resultRows = ProcessWithContenedoras(
                         worksheet,
                         contenedoraColumns,
@@ -260,7 +262,8 @@ namespace DataFlow.BL.Services
             return (minRow, maxRow);
         }
 
-        // Procesamiento columnas contenedoras
+        // CAMBIO: Procesamiento columnas contenedoras
+        // Solo se procesan celdas que estén dentro de rangos de dimensiones
         private List<Dictionary<string, object>> ProcessWithContenedoras(
             IXLWorksheet worksheet,
             List<ConfigColumn> contenedoraColumns,
@@ -276,6 +279,9 @@ namespace DataFlow.BL.Services
 
             foreach (var contCol in contenedoraColumns)
             {
+                // CAMBIO: Verificar si este rango contenedor tiene alguna celda cubierta por dimensiones
+                int cellsCoveredByDimensions = 0;
+
                 foreach (var range in contCol.Ranges ?? Enumerable.Empty<ColumnRange>())
                 {
                     var fromAddr = ParseCellAddress(range.RFrom!);
@@ -299,7 +305,8 @@ namespace DataFlow.BL.Services
                             resultRows.Add(prodTotalRow);
                         }
 
-                        // Procesar cada celda dentro del rango horizontal
+                        // CAMBIO: Procesar cada celda dentro del rango horizontal
+                        // Solo se añade a resultRows si la celda tiene dimensión asociada
                         for (int col = fromAddr.Col; col <= toAddr.Col; col++)
                         {
                             var cell = worksheet.Cell(row, col);
@@ -310,18 +317,31 @@ namespace DataFlow.BL.Services
                             var applicableDims = GetOrderedDimensionsForCell(
                                 row, col, dimensionIndex, dimensionOrder);
 
-                            var outputRow = BuildOutputRow(
-                                cellValue,
-                                contCol,
-                                contextValues,
-                                applicableDims,
-                                constantValues,
-                                templateConfig,
-                                orderedOutputColumns);
+                            // CAMBIO: Solo procesar si hay dimensiones asociadas
+                            if (applicableDims.Any())
+                            {
+                                cellsCoveredByDimensions++;
 
-                            resultRows.Add(outputRow);
+                                var outputRow = BuildOutputRow(
+                                    cellValue,
+                                    contCol,
+                                    contextValues,
+                                    applicableDims,
+                                    constantValues,
+                                    templateConfig,
+                                    orderedOutputColumns);
+
+                                resultRows.Add(outputRow);
+                            }
                         }
                     }
+                }
+
+                // CAMBIO: Warning si ninguna celda del rango contenedor está cubierta por dimensiones
+                if (cellsCoveredByDimensions == 0)
+                {
+                    Notify(ProcessNotificationLevel.Warning,
+                        $"Columna contenedora '{contCol.Name}': ninguna celda en sus rangos está cubierta por dimensiones. No se generarán filas para esta columna.");
                 }
             }
 
@@ -875,7 +895,6 @@ namespace DataFlow.BL.Services
             return row;
         }
 
-        //Helper para encontrar una columna totalizadora
         private bool IsTotalizadora(ConfigColumn col)
         {
             if (col == null) return false;
@@ -883,7 +902,6 @@ namespace DataFlow.BL.Services
             if (col.DataTypeId != _lookupIds.Numerico) return false;
             if (col.Ranges == null || !col.Ranges.Any()) return false;
 
-            // Aqui buscamos que nosean mas de 1 columna
             foreach (var r in col.Ranges)
             {
                 var from = ParseCellAddress(r.RFrom!);
@@ -896,15 +914,12 @@ namespace DataFlow.BL.Services
             return true;
         }
 
-        // Buscamos columna totalizadora y construimos fila
-
         private Dictionary<string, object>? BuildProductionTotalRow(
             Dictionary<int, object> contextValues,
             Dictionary<int, object> constantValues,
             ConfigTemplate templateConfig,
             List<ConfigColumn> orderedOutputColumns)
         {
-            
             var totalizadoraColumns = templateConfig.ConfigColumns
                 .Where(c => IsTotalizadora(c))
                 .ToList();
@@ -912,7 +927,6 @@ namespace DataFlow.BL.Services
             if (!totalizadoraColumns.Any())
                 return null;
 
-            
             ConfigColumn? selectedTotalizadora = null;
             object? totalizadoraValue = null;
 

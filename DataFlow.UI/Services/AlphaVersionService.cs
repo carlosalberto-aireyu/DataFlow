@@ -6,7 +6,7 @@ namespace DataFlow.UI.Services
 {
     public static class AlphaVersionService
     {
-        public const string VERSION = "1.0.0-alpha.1";
+        public const string VERSION = "1.0.0-alpha.2";
         private static readonly DateTime EXPIRY_DATE = new DateTime(2026, 3, 31);
         private const string SECURITY_HASH = "5F16E3";
 
