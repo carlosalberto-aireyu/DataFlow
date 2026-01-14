@@ -54,6 +54,7 @@ namespace DataFlow.BL.Services
                     break;
             }
         }
+
         private bool IsFileLocked(string filePath)
         {
             try
@@ -67,6 +68,7 @@ namespace DataFlow.BL.Services
             }
             return false;
         }
+
         public async Task<Result<string>> ProcessExcelFileAsync(
             string inputFilePath,
             string outputFilePath,
@@ -154,67 +156,64 @@ namespace DataFlow.BL.Services
                 // Leer CONSTANTES (valores fijos)
                 var constantValues = ReadConstantValues(worksheet, constantColumns);
 
-                // Determinar rango de procesamiento desde columnas de VALOR
-                var processingRange = DetermineProcessingRange(valueColumns);
-
-                if (processingRange == null)
-                {
-                    Notify(ProcessNotificationLevel.Warning, "No se encontró rango de procesamiento en columnas de valor");
-                    return resultRows;
-                }
+                // Separar columnas Valor en Normales y Contenedoras
+                var normalValueColumns = valueColumns.Where(c => !IsContenedor(c)).ToList();
+                var contenedoraColumns = valueColumns.Where(c => IsContenedor(c)).ToList();
 
                 Notify(ProcessNotificationLevel.Info,
-                    $"Rango de procesamiento detectado: Filas {processingRange.Value.FromRow} a {processingRange.Value.ToRow}");
+                    $"Columnas Valor - Normales: {normalValueColumns.Count}, Contenedoras: {contenedoraColumns.Count}");
 
-                // Preparar índice de DIMENSIONES (si existen)
-                var dimensionIndex = BuildDimensionIndex(dimensionColumns);
-                var dimensionOrder = DetermineDimensionOrder(dimensionColumns);
+                // PASO 1: Identificar filas válidas desde columnas Valor Normal
+                var validRows = IdentifyValidRows(worksheet, normalValueColumns);
+
+                Notify(ProcessNotificationLevel.Info,
+                    $"Filas válidas identificadas: {validRows.Count} ({string.Join(", ", validRows.OrderBy(r => r))})");
+
+                if (validRows.Count == 0)
+                {
+                    Notify(ProcessNotificationLevel.Warning, "No se encontraron filas válidas para procesar");
+                    return resultRows;
+                }
 
                 // Columnas de salida ordenadas por IndexColumn
                 var orderedOutputColumns = templateConfig.ConfigColumns
                     .OrderBy(c => c.IndexColumn)
                     .ToList();
 
-                // Detectar si hay columnas contenedoras (rangos horizontales multi-columna)
-                var contenedoraColumns = valueColumns.Where(IsContenedor).ToList();
-                bool hasContenedoras = contenedoraColumns.Any();
+                // PASO 2: Procesar columnas Valor Normal (generar filas base)
+                var normalValueData = ProcessNormalValueColumns(worksheet, normalValueColumns, validRows);
 
                 Notify(ProcessNotificationLevel.Info,
-                    hasContenedoras
-                        ? $"Modo: Procesamiento con {contenedoraColumns.Count} columnas contenedoras"
-                        : "Modo: Procesamiento fila por fila (sin columnas contenedoras)");
+                    $"Datos de columnas normales procesados: {normalValueData.Count} filas");
 
-                // Últimos valores válidos por columna 
-                var lastValidValues = new Dictionary<int, object>();
+                // CONJUNTO 1: Generar filas solo con columnas normales
+                var normalRows = BuildNormalValueRows(
+                    normalValueData,
+                    constantValues,
+                    orderedOutputColumns,
+                    contenedoraColumns);
 
-                // Procesar según disponibilidad de columnas contenedoras
-                if (hasContenedoras)
+                resultRows.AddRange(normalRows);
+
+                Notify(ProcessNotificationLevel.Info,
+                    $"Filas de valores normales generadas: {normalRows.Count}");
+
+                // CONJUNTO 2: Procesar columnas Contenedoras + Dimensiones (si existen)
+                if (contenedoraColumns.Any() && dimensionColumns.Any())
                 {
-                    //Con columnas contenedoras (celda por celda + dimensiones)
-                    resultRows = ProcessWithContenedoras(
+                    var dimensionRows = ProcessAndBuildDimensionRows(
                         worksheet,
+                        dimensionColumns,
                         contenedoraColumns,
-                        valueColumns,
+                        normalValueData,
                         constantValues,
-                        dimensionIndex,
-                        dimensionOrder,
-                        templateConfig,
                         orderedOutputColumns,
-                        lastValidValues);
-                }
-                else
-                {
-                    // Sin contenedoras (fila por fila)
-                    resultRows = ProcessRowByRow(
-                        worksheet,
-                        processingRange.Value,
-                        valueColumns,
-                        constantValues,
-                        dimensionIndex,
-                        dimensionOrder,
-                        templateConfig,
-                        orderedOutputColumns,
-                        lastValidValues);
+                        validRows);
+
+                    resultRows.AddRange(dimensionRows);
+
+                    Notify(ProcessNotificationLevel.Info,
+                        $"Filas de dimensiones generadas: {dimensionRows.Count}");
                 }
 
                 Notify(ProcessNotificationLevel.Info,
@@ -231,223 +230,327 @@ namespace DataFlow.BL.Services
             return resultRows;
         }
 
-        // Determinar el rango de filas a procesar basado en todas las columnas de valor
-        private (int FromRow, int ToRow)? DetermineProcessingRange(List<ConfigColumn> valueColumns)
+        #region PASO 1: Identificar filas válidas
+
+        private HashSet<int> IdentifyValidRows(IXLWorksheet worksheet, List<ConfigColumn> normalValueColumns)
         {
-            if (!(valueColumns.Count > 0) || valueColumns.All(c => c.Ranges == null || !c.Ranges.Any()))
-                return null;
+            var validRows = new HashSet<int>();
 
-            int minRow = int.MaxValue;
-            int maxRow = int.MinValue;
-
-            foreach (var col in valueColumns)
+            foreach (var column in normalValueColumns)
             {
-                if (col.Ranges == null) continue;
+                if (column.Ranges == null || !column.Ranges.Any())
+                    continue;
 
-                foreach (var range in col.Ranges)
+                foreach (var range in column.Ranges)
                 {
                     var from = ParseCellAddress(range.RFrom!);
                     var to = ParseCellAddress(range.RTo!);
 
-                    minRow = Math.Min(minRow, from.Row);
-                    maxRow = Math.Max(maxRow, to.Row);
-                }
-            }
-
-            if (minRow == int.MaxValue || maxRow == int.MinValue)
-                return null;
-
-            return (minRow, maxRow);
-        }
-
-        // Procesamiento columnas contenedoras
-        private List<Dictionary<string, object>> ProcessWithContenedoras(
-            IXLWorksheet worksheet,
-            List<ConfigColumn> contenedoraColumns,
-            List<ConfigColumn> valueColumns,
-            Dictionary<int, object> constantValues,
-            Dictionary<(int row, int col), List<(ConfigColumn Column, ColumnRange Range)>> dimensionIndex,
-            List<ConfigColumn> dimensionOrder,
-            ConfigTemplate templateConfig,
-            List<ConfigColumn> orderedOutputColumns,
-            Dictionary<int, object> lastValidValues)
-        {
-            var resultRows = new List<Dictionary<string, object>>();
-
-            foreach (var contCol in contenedoraColumns)
-            {
-                foreach (var range in contCol.Ranges ?? Enumerable.Empty<ColumnRange>())
-                {
-                    var fromAddr = ParseCellAddress(range.RFrom!);
-                    var toAddr = ParseCellAddress(range.RTo!);
-
-                    Notify(ProcessNotificationLevel.Info,
-                        $"Procesando rango contenedor {range.RFrom} a {range.RTo} para columna '{contCol.Name}'");
-
-                    for (int row = fromAddr.Row; row <= toAddr.Row; row++)
+                    for (int row = from.Row; row <= to.Row; row++)
                     {
-                        // Leer valores de contexto para esta fila
-                        var contextValues = ReadContextValuesForRow(
-                            worksheet, row, valueColumns, contCol, lastValidValues);
-
-                        // Generar fila totalizadora si aplica
-                        var prodTotalRow = BuildProductionTotalRow(
-                            contextValues, constantValues, templateConfig, orderedOutputColumns);
-
-                        if (prodTotalRow != null)
-                        {
-                            resultRows.Add(prodTotalRow);
-                        }
-
-                        // Procesar cada celda dentro del rango horizontal
-                        for (int col = fromAddr.Col; col <= toAddr.Col; col++)
+                        for (int col = from.Col; col <= to.Col; col++)
                         {
                             var cell = worksheet.Cell(row, col);
+                            var value = ReadCellValue(cell, column);
 
-                            if (!cell.TryGetValue(out double cellValue) || cellValue == 0)
-                                continue;
-
-                            var applicableDims = GetOrderedDimensionsForCell(
-                                row, col, dimensionIndex, dimensionOrder);
-
-                            var outputRow = BuildOutputRow(
-                                cellValue,
-                                contCol,
-                                contextValues,
-                                applicableDims,
-                                constantValues,
-                                templateConfig,
-                                orderedOutputColumns);
-
-                            resultRows.Add(outputRow);
+                            if (!IsEmptyValue(value, column.DataTypeId))
+                            {
+                                validRows.Add(row);
+                                break;
+                            }
                         }
                     }
                 }
             }
 
-            return resultRows;
+            return validRows;
         }
 
-        // Procesamiento SIN columnas contenedoras (fila por fila)
-        private List<Dictionary<string, object>> ProcessRowByRow(
+        #endregion
+
+        #region PASO 2: Procesar columnas Valor Normal con fill-forward
+
+        private Dictionary<int, Dictionary<int, object>> ProcessNormalValueColumns(
             IXLWorksheet worksheet,
-            (int FromRow, int ToRow) processingRange,
-            List<ConfigColumn> valueColumns,
-            Dictionary<int, object> constantValues,
-            Dictionary<(int row, int col), List<(ConfigColumn Column, ColumnRange Range)>> dimensionIndex,
-            List<ConfigColumn> dimensionOrder,
-            ConfigTemplate templateConfig,
-            List<ConfigColumn> orderedOutputColumns,
-            Dictionary<int, object> lastValidValues)
+            List<ConfigColumn> normalValueColumns,
+            HashSet<int> validRows)
         {
-            var resultRows = new List<Dictionary<string, object>>();
+            // Estructura: [fila][columnId] = valor
+            var data = new Dictionary<int, Dictionary<int, object>>();
 
-            Notify(ProcessNotificationLevel.Info,
-                $"Procesando fila por fila desde {processingRange.FromRow} hasta {processingRange.ToRow}");
+            // Últimos valores válidos por columna (para fill-forward)
+            var lastValidValues = new Dictionary<int, object>();
 
-            for (int row = processingRange.FromRow; row <= processingRange.ToRow; row++)
+            // Ordenar filas válidas para procesamiento secuencial (fill-forward)
+            var sortedRows = validRows.OrderBy(r => r).ToList();
+
+            foreach (int row in sortedRows)
             {
-                // Leer todos los valores de esta fila
-                var rowValues = new Dictionary<int, object>();
-                bool hasValidData = false;
+                data[row] = new Dictionary<int, object>();
 
-                foreach (var col in valueColumns)
+                foreach (var column in normalValueColumns)
                 {
-                    if (col.Ranges == null || !col.Ranges.Any()) continue;
+                    if (column.Ranges == null || !column.Ranges.Any())
+                        continue;
 
-                    foreach (var range in col.Ranges)
+                    object? foundValue = null;
+
+                    foreach (var range in column.Ranges)
                     {
                         var from = ParseCellAddress(range.RFrom!);
                         var to = ParseCellAddress(range.RTo!);
 
-                        // Verificar si esta fila está dentro del rango de esta columna
                         if (row < from.Row || row > to.Row)
                             continue;
 
-                        object cellValue = GetDefaultValue(col, range);
-
-                        // Leer valor(es) de esta fila en el rango de columnas
-                        for (int c = from.Col; c <= to.Col; c++)
+                        for (int col = from.Col; col <= to.Col; col++)
                         {
-                            var cell = worksheet.Cell(row, c);
-                            var candidate = ReadCellValue(cell, col);
+                            var cell = worksheet.Cell(row, col);
+                            var value = ReadCellValue(cell, column);
 
-                            if (!IsEmptyValue(candidate, col.DataTypeId))
+                            if (!IsEmptyValue(value, column.DataTypeId))
                             {
-                                cellValue = candidate;
-                                hasValidData = true;
+                                foundValue = value;
                                 break;
                             }
                         }
 
-                        // Aplicar valor ultimo si la celda está vacía
-                        if (IsEmptyValue(cellValue, col.DataTypeId))
+                        if (foundValue != null)
+                            break;
+                    }
+
+                    // Fill-forward: usar último valor válido o default
+                    if (foundValue == null || IsEmptyValue(foundValue, column.DataTypeId))
+                    {
+                        if (lastValidValues.TryGetValue(column.Id, out var lastVal))
                         {
-                            if (lastValidValues.TryGetValue(col.Id, out var lastVal))
-                            {
-                                cellValue = lastVal;
-                            }
+                            foundValue = lastVal;
                         }
                         else
                         {
-                            lastValidValues[col.Id] = cellValue;
+                            foundValue = GetDefaultValue(column, null);
                         }
-
-                        rowValues[col.Id] = cellValue;
-                        break; // Solo procesar el primer rango que aplique
                     }
+                    else
+                    {
+                        // Actualizar último valor válido
+                        lastValidValues[column.Id] = foundValue;
+                    }
+
+                    data[row][column.Id] = foundValue;
                 }
-
-                // Solo generar fila si tiene datos válidos
-                if (!hasValidData)
-                    continue;
-
-                // Obtener dimensiones aplicables para esta fila
-                var applicableDims = GetDimensionsForRow(
-                    worksheet, row, dimensionIndex, dimensionOrder, valueColumns);
-
-                // Construir fila de salida
-                var outputRow = BuildOutputRowFromValues(
-                    rowValues,
-                    applicableDims,
-                    constantValues,
-                    templateConfig,
-                    orderedOutputColumns);
-
-                resultRows.Add(outputRow);
             }
 
-            return resultRows;
+            return data;
         }
 
-        // Obtener dimensiones aplicables para una fila completa
-        private List<(ConfigColumn Column, ColumnRange Range)> GetDimensionsForRow(
-            IXLWorksheet worksheet,
-            int row,
-            Dictionary<(int row, int col), List<(ConfigColumn Column, ColumnRange Range)>> dimensionIndex,
-            List<ConfigColumn> dimensionOrder,
-            List<ConfigColumn> valueColumns)
-        {
-            // Intentar obtener dimensiones desde la primera celda de valor en esta fila
-            var firstValueCol = valueColumns.FirstOrDefault(c => c.Ranges?.Any() == true);
-            if (firstValueCol?.Ranges == null)
-                return new List<(ConfigColumn, ColumnRange)>();
+        #endregion
 
-            var firstRange = firstValueCol.Ranges.First();
-            var firstColAddr = ParseCellAddress(firstRange.RFrom!);
+        #region CONJUNTO 1: Generar filas solo con valores normales
 
-            return GetOrderedDimensionsForCell(row, firstColAddr.Col, dimensionIndex, dimensionOrder);
-        }
-
-        // Construir fila de salida desde valores leídos (sin columna contenedora)
-        private Dictionary<string, object> BuildOutputRowFromValues(
-            Dictionary<int, object> rowValues,
-            List<(ConfigColumn Column, ColumnRange Range)> dimensions,
+        private List<Dictionary<string, object>> BuildNormalValueRows(
+            Dictionary<int, Dictionary<int, object>> normalValueData,
             Dictionary<int, object> constantValues,
-            ConfigTemplate templateConfig,
+            List<ConfigColumn> orderedOutputColumns,
+            List<ConfigColumn> contenedoraColumns)
+        {
+            var rows = new List<Dictionary<string, object>>();
+
+            foreach (var row in normalValueData.Keys.OrderBy(r => r))
+            {
+                var normalData = normalValueData[row];
+                var outputRow = new Dictionary<string, object>();
+
+                foreach (var column in orderedOutputColumns)
+                {
+                    var columnName = column.NameDisplay ?? column.Name ?? $"Column_{column.IndexColumn}";
+                    object? value;
+
+                    if (column.ColumnTypeId == _lookupIds.Constante)
+                    {
+                        value = constantValues.TryGetValue(column.Id, out var v)
+                            ? v
+                            : GetDefaultValue(column, null);
+                    }
+                    else if (column.ColumnTypeId == _lookupIds.Valor)
+                    {
+                        if (IsContenedor(column))
+                        {
+                            // Contenedora = 0 o default en filas normales
+                            value = GetDefaultValue(column, null);
+                        }
+                        else
+                        {
+                            value = normalData.TryGetValue(column.Id, out var v)
+                                ? v
+                                : GetDefaultValue(column, null);
+                        }
+                    }
+                    else if (column.ColumnTypeId == _lookupIds.Dimension)
+                    {
+                        // Dimensión = vacío en filas normales
+                        value = string.Empty;
+                    }
+                    else
+                    {
+                        value = GetDefaultValue(column, null);
+                    }
+
+                    outputRow[columnName] = value ?? string.Empty;
+                }
+
+                rows.Add(outputRow);
+            }
+
+            return rows;
+        }
+
+        #endregion
+
+        #region CONJUNTO 2: Procesar y generar filas de dimensiones
+
+        private List<Dictionary<string, object>> ProcessAndBuildDimensionRows(
+            IXLWorksheet worksheet,
+            List<ConfigColumn> dimensionColumns,
+            List<ConfigColumn> contenedoraColumns,
+            Dictionary<int, Dictionary<int, object>> normalValueData,
+            Dictionary<int, object> constantValues,
+            List<ConfigColumn> orderedOutputColumns,
+            HashSet<int> validRows)
+        {
+            var dimensionRows = new List<Dictionary<string, object>>();
+
+            // Identificar todas las celdas únicas a procesar
+            var cellsToProcess = new HashSet<(int row, int col)>();
+
+            foreach (var dimColumn in dimensionColumns)
+            {
+                if (dimColumn.Ranges == null || !dimColumn.Ranges.Any())
+                    continue;
+
+                foreach (var range in dimColumn.Ranges)
+                {
+                    var from = ParseCellAddress(range.RFrom!);
+                    var to = ParseCellAddress(range.RTo!);
+
+                    for (int row = from.Row; row <= to.Row; row++)
+                    {
+                        if (!validRows.Contains(row))
+                            continue;
+
+                        for (int col = from.Col; col <= to.Col; col++)
+                        {
+                            cellsToProcess.Add((row, col));
+                        }
+                    }
+                }
+            }
+
+            // Procesar cada celda única
+            foreach (var (row, col) in cellsToProcess.OrderBy(c => c.row).ThenBy(c => c.col))
+            {
+                var cell = worksheet.Cell(row, col);
+
+                // Determinar qué columna contenedora corresponde
+                var contenedora = GetContenedoraForCell(contenedoraColumns, row, col);
+                if (contenedora == null)
+                    continue;
+
+                // Leer valor de la celda
+                var cellValue = ReadCellValue(cell, contenedora);
+
+                // Solo procesar si hay un valor válido (no vacío)
+                if (IsEmptyValue(cellValue, contenedora.DataTypeId))
+                    continue;
+
+                // Obtener valores normales de esta fila
+                var normalData = normalValueData.ContainsKey(row)
+                    ? normalValueData[row]
+                    : new Dictionary<int, object>();
+
+                // Obtener todas las dimensiones aplicables a esta celda
+                var dimensionsAtCell = GetAllDimensionsAtCell(
+                    dimensionColumns,
+                    row,
+                    col);
+
+                // Construir fila de salida
+                var outputRow = BuildDimensionRow(
+                    normalData,
+                    constantValues,
+                    contenedora,
+                    cellValue,
+                    dimensionsAtCell,
+                    orderedOutputColumns);
+
+                dimensionRows.Add(outputRow);
+            }
+
+            return dimensionRows;
+        }
+
+        private ConfigColumn? GetContenedoraForCell(
+            List<ConfigColumn> contenedoraColumns,
+            int row,
+            int col)
+        {
+            foreach (var cont in contenedoraColumns)
+            {
+                if (cont.Ranges == null)
+                    continue;
+
+                foreach (var contRange in cont.Ranges)
+                {
+                    var from = ParseCellAddress(contRange.RFrom!);
+                    var to = ParseCellAddress(contRange.RTo!);
+
+                    if (row >= from.Row && row <= to.Row && col >= from.Col && col <= to.Col)
+                    {
+                        return cont;
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private Dictionary<int, string> GetAllDimensionsAtCell(
+            List<ConfigColumn> dimensionColumns,
+            int row,
+            int col)
+        {
+            var dimensions = new Dictionary<int, string>();
+
+            foreach (var dimCol in dimensionColumns)
+            {
+                if (dimCol.Ranges == null)
+                    continue;
+
+                foreach (var range in dimCol.Ranges)
+                {
+                    var from = ParseCellAddress(range.RFrom!);
+                    var to = ParseCellAddress(range.RTo!);
+
+                    if (row >= from.Row && row <= to.Row && col >= from.Col && col <= to.Col)
+                    {
+                        dimensions[dimCol.Id] = range.DefaultValue ?? string.Empty;
+                        break;
+                    }
+                }
+            }
+
+            return dimensions;
+        }
+
+        private Dictionary<string, object> BuildDimensionRow(
+            Dictionary<int, object> normalData,
+            Dictionary<int, object> constantValues,
+            ConfigColumn contenedoraColumn,
+            object contenedoraValue,
+            Dictionary<int, string> dimensionsAtCell,
             List<ConfigColumn> orderedOutputColumns)
         {
-            var row = new Dictionary<string, object>();
+            var outputRow = new Dictionary<string, object>();
 
             foreach (var column in orderedOutputColumns)
             {
@@ -456,49 +559,65 @@ namespace DataFlow.BL.Services
 
                 if (column.ColumnTypeId == _lookupIds.Constante)
                 {
-                    // CONSTANTES: usar valores leídos al inicio
                     value = constantValues.TryGetValue(column.Id, out var v)
                         ? v
                         : GetDefaultValue(column, null);
                 }
                 else if (column.ColumnTypeId == _lookupIds.Valor)
                 {
-                    // VALORES: usar valores leídos de la fila
-                    value = rowValues.TryGetValue(column.Id, out var v)
-                        ? v
-                        : GetDefaultValue(column, null);
-                }
-                else if (column.ColumnTypeId == _lookupIds.Dimension)
-                {
-                    // DIMENSIONES: usar valores del índice de dimensiones
-                    var applicable = dimensions.FirstOrDefault(d => d.Column.Id == column.Id);
-                    if (applicable.Column != null && !string.IsNullOrEmpty(applicable.Range.DefaultValue))
+                    if (column.Id == contenedoraColumn.Id)
                     {
-                        value = applicable.Range.DefaultValue;
+                        // Columna contenedora: usar valor de la celda
+                        value = contenedoraValue;
+                    }
+                    else if (IsContenedor(column))
+                    {
+                        // Otra contenedora: poner en 0 o default
+                        value = GetDefaultValue(column, null);
                     }
                     else
                     {
-                        value = GetDefaultValue(column, null);
+                        // Columna normal: solo copiar si es TEXTO (llave)
+                        if (column.DataTypeId == _lookupIds.Texto)
+                        {
+                            // Es una "llave": copiar desde normalData
+                            value = normalData.TryGetValue(column.Id, out var v)
+                                ? v
+                                : GetDefaultValue(column, null);
+                        }
+                        else
+                        {
+                            // Es numérica o fecha: poner en default (0 para numérico)
+                            value = GetDefaultValue(column, null);
+                        }
                     }
+                }
+                else if (column.ColumnTypeId == _lookupIds.Dimension)
+                {
+                    // Dimensión: usar DefaultValue si aplica a esta celda
+                    value = dimensionsAtCell.TryGetValue(column.Id, out var dimValue)
+                        ? dimValue
+                        : string.Empty;
                 }
                 else
                 {
-                    value = column.DataTypeId == _lookupIds.Numerico ? 0.0 : string.Empty;
+                    value = GetDefaultValue(column, null);
                 }
 
-                row[columnName] = value ?? string.Empty;
+                outputRow[columnName] = value ?? string.Empty;
             }
 
-            return row;
+            return outputRow;
         }
 
-        #region Helpers: detección contenedora, indexado dimensiones y orden
+        #endregion
+
+        #region Helpers: detección contenedora
 
         private bool IsContenedor(ConfigColumn col)
         {
             if (col == null) return false;
             if (col.ColumnTypeId != _lookupIds.Valor) return false;
-            if (col.DataTypeId != _lookupIds.Numerico) return false;
             if (col.Ranges == null || !col.Ranges.Any()) return false;
 
             foreach (var r in col.Ranges)
@@ -511,107 +630,9 @@ namespace DataFlow.BL.Services
             return false;
         }
 
-        private Dictionary<(int row, int col), List<(ConfigColumn Column, ColumnRange Range)>> BuildDimensionIndex(
-            List<ConfigColumn> dimensionColumns)
-        {
-            var index = new Dictionary<(int row, int col), List<(ConfigColumn, ColumnRange)>>();
-
-            foreach (var dim in dimensionColumns)
-            {
-                if (dim.Ranges == null) continue;
-
-                foreach (var range in dim.Ranges)
-                {
-                    var from = ParseCellAddress(range.RFrom!);
-                    var to = ParseCellAddress(range.RTo!);
-
-                    for (int r = from.Row; r <= to.Row; r++)
-                    {
-                        for (int c = from.Col; c <= to.Col; c++)
-                        {
-                            var key = (r, c);
-                            if (!index.TryGetValue(key, out var list))
-                            {
-                                list = new List<(ConfigColumn, ColumnRange)>();
-                                index[key] = list;
-                            }
-                            list.Add((dim, range));
-                        }
-                    }
-                }
-            }
-
-            return index;
-        }
-
-        private List<ConfigColumn> DetermineDimensionOrder(List<ConfigColumn> dimensionColumns)
-        {
-            Func<ColumnRange, (int fr, int fc, int tr, int tc)> toCoords = r =>
-            {
-                var f = ParseCellAddress(r.RFrom!);
-                var t = ParseCellAddress(r.RTo!);
-                return (f.Row, f.Col, t.Row, t.Col);
-            };
-
-            bool RangeContains((int fr, int fc, int tr, int tc) outer, (int fr, int fc, int tr, int tc) inner)
-                => inner.fr >= outer.fr && inner.tr <= outer.tr &&
-                   inner.fc >= outer.fc && inner.tc <= outer.tc;
-
-            bool DimensionAContainsB(ConfigColumn a, ConfigColumn b)
-            {
-                if (a.Ranges == null || b.Ranges == null) return false;
-
-                var aRanges = a.Ranges.Select(toCoords).ToList();
-                var bRanges = b.Ranges.Select(toCoords).ToList();
-
-                foreach (var br in bRanges)
-                {
-                    if (!aRanges.Any(ar => RangeContains(ar, br)))
-                        return false;
-                }
-                return true;
-            }
-
-            var scores = new Dictionary<int, int>();
-            foreach (var a in dimensionColumns)
-            {
-                int count = dimensionColumns.Count(b => DimensionAContainsB(a, b));
-                scores[a.Id] = count;
-            }
-
-            var ordered = dimensionColumns
-                .OrderByDescending(c => scores[c.Id])
-                .ThenBy(c => c.IndexColumn)
-                .ToList();
-
-            return ordered;
-        }
-
-        private List<(ConfigColumn Column, ColumnRange Range)> GetOrderedDimensionsForCell(
-            int row,
-            int col,
-            Dictionary<(int row, int col), List<(ConfigColumn Column, ColumnRange Range)>> dimensionIndex,
-            List<ConfigColumn> dimensionOrder)
-        {
-            if (!dimensionIndex.TryGetValue((row, col), out var list))
-                return new List<(ConfigColumn, ColumnRange)>();
-
-            var orderById = dimensionOrder.Select(d => d.Id).ToList();
-
-            var ordered = list
-                .OrderBy(item =>
-                {
-                    var idx = orderById.IndexOf(item.Column.Id);
-                    return idx >= 0 ? idx : int.MaxValue;
-                })
-                .ToList();
-
-            return ordered;
-        }
-
         #endregion
 
-        #region Helpers: lectura de constantes y contexto (fill-forward)
+        #region Helpers: lectura de constantes
 
         private Dictionary<int, object> ReadConstantValues(
             IXLWorksheet worksheet,
@@ -641,64 +662,6 @@ namespace DataFlow.BL.Services
             }
 
             return values;
-        }
-
-        private Dictionary<int, object> ReadContextValuesForRow(
-            IXLWorksheet worksheet,
-            int targetRow,
-            List<ConfigColumn> valueColumns,
-            ConfigColumn excludeColumn,
-            Dictionary<int, object> lastValidValues)
-        {
-            var contextValues = new Dictionary<int, object>();
-
-            foreach (var column in valueColumns)
-            {
-                if (column.Id == excludeColumn.Id)
-                    continue;
-
-                if (column.Ranges?.Any() != true)
-                    continue;
-
-                foreach (var range in column.Ranges)
-                {
-                    var from = ParseCellAddress(range.RFrom!);
-                    var to = ParseCellAddress(range.RTo!);
-
-                    if (targetRow < from.Row || targetRow > to.Row)
-                        continue;
-
-                    object cellValue = GetDefaultValue(column, range);
-
-                    for (int c = from.Col; c <= to.Col; c++)
-                    {
-                        var cell = worksheet.Cell(targetRow, c);
-                        var candidate = ReadCellValue(cell, column);
-                        if (!IsEmptyValue(candidate, column.DataTypeId))
-                        {
-                            cellValue = candidate;
-                            break;
-                        }
-                    }
-
-                    if (IsEmptyValue(cellValue, column.DataTypeId))
-                    {
-                        if (lastValidValues.TryGetValue(column.Id, out var lastVal))
-                        {
-                            cellValue = lastVal;
-                        }
-                    }
-                    else
-                    {
-                        lastValidValues[column.Id] = cellValue;
-                    }
-
-                    contextValues[column.Id] = cellValue;
-                    break;
-                }
-            }
-
-            return contextValues;
         }
 
         #endregion
@@ -761,9 +724,10 @@ namespace DataFlow.BL.Services
             if (value is string strValue)
                 return string.IsNullOrWhiteSpace(strValue);
 
-            if (value is double)
+            if (value is double doubleValue)
             {
-                // 0 se considera válido en este dominio
+                // 0 se considera vacío para validación de filas válidas
+                // pero válido para datos numéricos
                 return false;
             }
 
@@ -807,187 +771,7 @@ namespace DataFlow.BL.Services
 
         #endregion
 
-        #region Helpers: construir filas de salida
-
-        private Dictionary<string, object> BuildOutputRow(
-            double numericValue,
-            ConfigColumn contenedoraColumn,
-            Dictionary<int, object> contextValues,
-            List<(ConfigColumn Column, ColumnRange Range)> dimensions,
-            Dictionary<int, object> constantValues,
-            ConfigTemplate templateConfig,
-            List<ConfigColumn> orderedOutputColumns)
-        {
-            var row = new Dictionary<string, object>();
-
-            foreach (var column in orderedOutputColumns)
-            {
-                var columnName = column.NameDisplay ?? column.Name ?? $"Column_{column.IndexColumn}";
-                object? value;
-
-                if (column.ColumnTypeId == _lookupIds.Constante)
-                {
-                    value = constantValues.TryGetValue(column.Id, out var v)
-                        ? v
-                        : GetDefaultValue(column, null);
-                }
-                else if (column.ColumnTypeId == _lookupIds.Valor)
-                {
-                    if (column.Id == contenedoraColumn.Id)
-                    {
-                        value = numericValue;
-                    }
-                    else
-                    {
-                        if (column.DataTypeId == _lookupIds.Numerico)
-                        {
-                            value = 0.0;
-                        }
-                        else
-                        {
-                            if (contextValues.TryGetValue(column.Id, out var ctxVal))
-                                value = ctxVal;
-                            else
-                                value = GetDefaultValue(column, null);
-                        }
-                    }
-                }
-                else if (column.ColumnTypeId == _lookupIds.Dimension)
-                {
-                    var applicable = dimensions.FirstOrDefault(d => d.Column.Id == column.Id);
-                    if (applicable.Column != null && !string.IsNullOrEmpty(applicable.Range.DefaultValue))
-                    {
-                        value = applicable.Range.DefaultValue;
-                    }
-                    else
-                    {
-                        value = string.Empty;
-                    }
-                }
-                else
-                {
-                    value = column.DataTypeId == _lookupIds.Numerico ? 0.0 : string.Empty;
-                }
-
-                row[columnName] = value ?? string.Empty;
-            }
-
-            return row;
-        }
-
-        //Helper para encontrar una columna totalizadora
-        private bool IsTotalizadora(ConfigColumn col)
-        {
-            if (col == null) return false;
-            if (col.ColumnTypeId != _lookupIds.Valor) return false;
-            if (col.DataTypeId != _lookupIds.Numerico) return false;
-            if (col.Ranges == null || !col.Ranges.Any()) return false;
-
-            // Aqui buscamos que nosean mas de 1 columna
-            foreach (var r in col.Ranges)
-            {
-                var from = ParseCellAddress(r.RFrom!);
-                var to = ParseCellAddress(r.RTo!);
-
-                if (to.Col > from.Col)
-                    return false;
-            }
-
-            return true;
-        }
-
-        // Buscamos columna totalizadora y construimos fila
-
-        private Dictionary<string, object>? BuildProductionTotalRow(
-            Dictionary<int, object> contextValues,
-            Dictionary<int, object> constantValues,
-            ConfigTemplate templateConfig,
-            List<ConfigColumn> orderedOutputColumns)
-        {
-            
-            var totalizadoraColumns = templateConfig.ConfigColumns
-                .Where(c => IsTotalizadora(c))
-                .ToList();
-
-            if (!totalizadoraColumns.Any())
-                return null;
-
-            
-            ConfigColumn? selectedTotalizadora = null;
-            object? totalizadoraValue = null;
-
-            foreach (var totCol in totalizadoraColumns)
-            {
-                if (contextValues.TryGetValue(totCol.Id, out var value))
-                {
-                    if (!IsEmptyValue(value, totCol.DataTypeId))
-                    {
-                        selectedTotalizadora = totCol;
-                        totalizadoraValue = value;
-                        break;
-                    }
-                }
-            }
-
-            if (selectedTotalizadora == null || totalizadoraValue == null)
-                return null;
-
-            Notify(ProcessNotificationLevel.Info,
-                $"Generando fila totalizadora para '{selectedTotalizadora.Name}' con valor: {totalizadoraValue}");
-
-            var row = new Dictionary<string, object>();
-
-            foreach (var column in orderedOutputColumns)
-            {
-                var columnName = column.NameDisplay ?? column.Name ?? $"Column_{column.IndexColumn}";
-                object? value;
-
-                if (column.ColumnTypeId == _lookupIds.Constante)
-                {
-                    value = constantValues.TryGetValue(column.Id, out var v)
-                        ? v
-                        : GetDefaultValue(column, null);
-                }
-                else if (column.ColumnTypeId == _lookupIds.Valor)
-                {
-                    if (column.Id == selectedTotalizadora.Id)
-                    {
-                        value = totalizadoraValue;
-                    }
-                    else
-                    {
-                        if (column.DataTypeId == _lookupIds.Numerico)
-                        {
-                            value = 0.0;
-                        }
-                        else
-                        {
-                            if (contextValues.TryGetValue(column.Id, out var ctxVal))
-                                value = ctxVal;
-                            else
-                                value = GetDefaultValue(column, null);
-                        }
-                    }
-                }
-                else if (column.ColumnTypeId == _lookupIds.Dimension)
-                {
-                    // Dimensiones no aplican en la fila totalizadora
-                    value = string.Empty;
-                }
-                else
-                {
-                    value = column.DataTypeId == _lookupIds.Numerico ? 0.0 : string.Empty;
-                }
-
-                row[columnName] = value ?? string.Empty;
-            }
-
-            return row;
-        }
-
-        #endregion
-
-        #region Utilidades: Parseo direcciones y tamaños
+        #region Utilidades: Parseo direcciones
 
         private (int Row, int Col) ParseCellAddress(string cellAddress)
         {
@@ -1006,20 +790,6 @@ namespace DataFlow.BL.Services
             }
 
             return (rowNumber, colNumber);
-        }
-
-        private int GetRangeSize(ColumnRange range)
-        {
-            try
-            {
-                var from = ParseCellAddress(range.RFrom!);
-                var to = ParseCellAddress(range.RTo!);
-                return (to.Row - from.Row + 1) * (to.Col - from.Col + 1);
-            }
-            catch
-            {
-                return 0;
-            }
         }
 
         #endregion
