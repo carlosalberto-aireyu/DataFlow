@@ -265,8 +265,7 @@ namespace DataFlow.BL.Services
             return (minRow, maxRow);
         }
 
-        // CAMBIO: Procesamiento columnas contenedoras
-        // Solo se procesan celdas que coincidan con columnas de Valor
+        
         private List<Dictionary<string, object>> ProcessWithContenedoras(
             IXLWorksheet worksheet,
             List<ConfigColumn> contenedoraColumns,
