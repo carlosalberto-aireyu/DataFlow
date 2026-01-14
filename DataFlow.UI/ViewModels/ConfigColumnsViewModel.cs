@@ -408,6 +408,15 @@ namespace DataFlow.UI.ViewModels
 
                 if (result.IsSuccess)
                 {
+                    ApplyFilter();
+                    var columnId = SelectedColumn.Id;
+                    var updatedColumn = Columns.FirstOrDefault(c => c.Id == columnId);
+                    if (updatedColumn != null)
+                    {
+                        SelectedColumn = updatedColumn;
+                        _logger.LogInformation("SelectedColumn actualizado con datos del servidor para Id {Id}", SelectedColumn.Id);
+
+                    }
                     _logger.LogInformation("Columna actualizada: {Id}", SelectedColumn.Id);
                 }
                 else

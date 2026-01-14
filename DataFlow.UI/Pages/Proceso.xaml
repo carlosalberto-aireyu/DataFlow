@@ -66,7 +66,7 @@
             <TextBlock Text="Ruta del Archivo de Salida:" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="OutputPathTextBlock" Text="" TextWrapping="Wrap" Background="#F0F0F0" Padding="5"/>
         </StackPanel>
-        <Grid Grid.Row="5" x:Name="MonitorGrid"
+        <Grid Grid.Row="6" x:Name="MonitorGrid"
               Background="#FFFFFF"
               HorizontalAlignment="Stretch"
               VerticalAlignment="Stretch"
@@ -76,7 +76,7 @@
             </Grid.RowDefinitions>
         </Grid>
 
-        <Button Grid.Row="6" x:Name="StartProcessButton" Content="Iniciar Proceso de Normalización"
+        <Button Grid.Row="7" x:Name="StartProcessButton" Content="Iniciar Proceso de Normalización"
             HorizontalAlignment="Center" VerticalAlignment="Bottom" Width="250" Height="40" Click="StartProcessButton_Click"
             />
 
