@@ -164,10 +164,17 @@ namespace DataFlow.BL.Services
                     $"Columnas Valor - Normales: {normalValueColumns.Count}, Contenedoras: {contenedoraColumns.Count}");
 
                 // PASO 1: Identificar filas válidas desde columnas Valor Normal
+                // PASO 1a: Identificar filas válidas para el primer grupo (solo columnas numéricas)
+                var validRowsForNormalGroup = IdentifyValidRowsForNormalGroup(normalValueColumns);
+
+                Notify(ProcessNotificationLevel.Info,
+                    $"Filas válidas para primer grupo (normales): {validRowsForNormalGroup.Count} ({string.Join(", ", validRowsForNormalGroup.OrderBy(r => r))})");
+
+                // PASO 1b: Identificar filas válidas para el segundo grupo (todas las columnas normales)
                 var validRows = IdentifyValidRows(worksheet, normalValueColumns);
 
                 Notify(ProcessNotificationLevel.Info,
-                    $"Filas válidas identificadas: {validRows.Count} ({string.Join(", ", validRows.OrderBy(r => r))})");
+                    $"Filas válidas para segundo grupo (dimensiones): {validRows.Count} ({string.Join(", ", validRows.OrderBy(r => r))})");
 
                 if (validRows.Count == 0)
                 {
@@ -181,7 +188,7 @@ namespace DataFlow.BL.Services
                     .ToList();
 
                 // PASO 2: Procesar columnas Valor Normal (generar filas base)
-                var normalValueData = ProcessNormalValueColumns(worksheet, normalValueColumns, validRows);
+                var normalValueData = ProcessNormalValueColumns(worksheet, normalValueColumns, validRowsForNormalGroup);
 
                 Notify(ProcessNotificationLevel.Info,
                      $"Columnas de Valor - Normales: {normalValueColumns.Count}, Contenedoras: {contenedoraColumns.Count}");
@@ -239,9 +246,12 @@ namespace DataFlow.BL.Services
         {
             var validRows = new HashSet<int>();
 
+            if (normalValueColumns.Count <= 0)
+                return validRows;
+
             foreach (var column in normalValueColumns)
             {
-                if (column.Ranges == null || !column.Ranges.Any())
+                if (column.Ranges == null || column.Ranges.Count <= 0)
                     continue;
 
                 foreach (var range in column.Ranges)
@@ -263,6 +273,50 @@ namespace DataFlow.BL.Services
                             }
                         }
                     }
+                }
+            }
+
+            return validRows;
+        }
+        private HashSet<int> IdentifyValidRowsForNormalGroup(List<ConfigColumn> normalValueColumns)
+        {
+            var validRows = new HashSet<int>();
+
+            // Filtrar solo columnas de tipo numérico
+            var numericColumns = normalValueColumns
+                .Where(c => c.DataTypeId == _lookupIds.Numerico)
+                .ToList();
+
+            // Si no hay columnas numéricas, no hay filas válidas para el primer grupo
+            if (numericColumns.Count <= 0)
+            {
+                Notify(ProcessNotificationLevel.Info,
+                    "No hay columnas de valor normal numéricas. El primer grupo no generará filas.");
+                return validRows;
+            }
+
+            Notify(ProcessNotificationLevel.Info,
+                $"Columnas numéricas encontradas para filtro: {numericColumns.Count}");
+
+            // Agregar todas las filas que están dentro de los rangos de columnas numéricas
+            foreach (var column in numericColumns)
+            {
+                if (column.Ranges == null || !column.Ranges.Any())
+                    continue;
+
+                foreach (var range in column.Ranges)
+                {
+                    var from = ParseCellAddress(range.RFrom!);
+                    var to = ParseCellAddress(range.RTo!);
+
+                    // Agregar todas las filas dentro del rango (independiente del valor)
+                    for (int row = from.Row; row <= to.Row; row++)
+                    {
+                        validRows.Add(row);
+                    }
+
+                    Notify(ProcessNotificationLevel.Info,
+                        $"  Columna '{column.Name}' - Rango {range.RFrom} a {range.RTo}: filas {from.Row}-{to.Row}");
                 }
             }
 
