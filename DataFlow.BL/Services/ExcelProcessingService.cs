@@ -124,8 +124,7 @@ namespace DataFlow.BL.Services
             }
         }
 
-        private List<Dictionary<string, object>> ProcessExcelFile(
-                string inputFilePath, ConfigTemplate templateConfig)
+        private List<Dictionary<string, object>> ProcessExcelFile(string inputFilePath, ConfigTemplate templateConfig)
         {
             var resultRows = new List<Dictionary<string, object>>();
 
@@ -163,54 +162,59 @@ namespace DataFlow.BL.Services
                 Notify(ProcessNotificationLevel.Info,
                     $"Columnas Valor - Normales: {normalValueColumns.Count}, Contenedoras: {contenedoraColumns.Count}");
 
-                // PASO 1: Identificar filas válidas desde columnas Valor Normal
-                // PASO 1a: Identificar filas válidas para el primer grupo (solo columnas numéricas)
-                var validRowsForNormalGroup = IdentifyValidRowsForNormalGroup(normalValueColumns);
+                // PASO 1: Identificar TODAS las filas válidas (base común)
+                var allValidRows = IdentifyValidRowsFromColumns(normalValueColumns);
 
                 Notify(ProcessNotificationLevel.Info,
-                    $"Filas válidas para primer grupo (normales): {validRowsForNormalGroup.Count} ({string.Join(", ", validRowsForNormalGroup.OrderBy(r => r))})");
+                    $"Filas válidas totales (base común): {allValidRows.Count} ({string.Join(", ", allValidRows.OrderBy(r => r))})");
 
-                // PASO 1b: Identificar filas válidas para el segundo grupo (todas las columnas normales)
-                var validRows = IdentifyValidRows(worksheet, normalValueColumns);
+                // PASO 2: Procesar TODAS las columnas normales con TODAS las filas válidas
+                var normalValueData = ProcessNormalValueColumns(worksheet, normalValueColumns, allValidRows);
 
                 Notify(ProcessNotificationLevel.Info,
-                    $"Filas válidas para segundo grupo (dimensiones): {validRows.Count} ({string.Join(", ", validRows.OrderBy(r => r))})");
-
-                if (validRows.Count == 0)
-                {
-                    Notify(ProcessNotificationLevel.Warning, "No se encontraron filas válidas para procesar");
-                    return resultRows;
-                }
+                    $"Datos de columnas normales procesados: {normalValueData.Count} filas");
 
                 // Columnas de salida ordenadas por IndexColumn
                 var orderedOutputColumns = templateConfig.ConfigColumns
                     .OrderBy(c => c.IndexColumn)
                     .ToList();
 
-                // PASO 2: Procesar columnas Valor Normal (generar filas base)
-                var normalValueData = ProcessNormalValueColumns(worksheet, normalValueColumns, validRowsForNormalGroup);
+                // CONJUNTO 1: Generar filas con columnas normales
+                // Filtro: Solo filas que coincidan con rangos de columnas numéricas
+                var numericColumnsRows = IdentifyValidRowsFromColumns(normalValueColumns, _lookupIds.Numerico);
 
-                Notify(ProcessNotificationLevel.Info,
-                     $"Columnas de Valor - Normales: {normalValueColumns.Count}, Contenedoras: {contenedoraColumns.Count}");
+                if (numericColumnsRows.Any())
+                {
+                    Notify(ProcessNotificationLevel.Info,
+                        $"Filas del primer grupo (columnas numéricas): {numericColumnsRows.Count} ({string.Join(", ", numericColumnsRows.OrderBy(r => r))})");
 
-                Notify(ProcessNotificationLevel.Info,
-                    $"Datos de columnas normales procesados: {normalValueData.Count} filas");
+                    var normalRows = BuildNormalValueRows(
+                        normalValueData,
+                        constantValues,
+                        orderedOutputColumns,
+                        contenedoraColumns,
+                        numericColumnsRows);
 
-                // CONJUNTO 1: Generar filas solo con columnas normales
-                var normalRows = BuildNormalValueRows(
-                    normalValueData,
-                    constantValues,
-                    orderedOutputColumns,
-                    contenedoraColumns);
+                    resultRows.AddRange(normalRows);
 
-                resultRows.AddRange(normalRows);
+                    Notify(ProcessNotificationLevel.Info,
+                        $"Filas de valores normales generadas: {normalRows.Count}");
+                }
+                else
+                {
+                    Notify(ProcessNotificationLevel.Info,
+                        "No se generaron filas de valores normales (no hay columnas numéricas)");
+                }
 
-                Notify(ProcessNotificationLevel.Info,
-                    $"Filas de valores normales generadas: {normalRows.Count}");
-
-                // CONJUNTO 2: Procesar columnas Contenedoras + Dimensiones (si existen)
+                // CONJUNTO 2: Procesar columnas Contenedoras + Dimensiones
                 if (contenedoraColumns.Any() && dimensionColumns.Any())
                 {
+                    // Filtro: Solo filas que coincidan con rangos de columnas de texto normales
+                    var textColumnsRows = IdentifyValidRowsFromColumns(normalValueColumns, _lookupIds.Texto);
+
+                    Notify(ProcessNotificationLevel.Info,
+                        $"Filas del segundo grupo (columnas texto): {textColumnsRows.Count} ({string.Join(", ", textColumnsRows.OrderBy(r => r))})");
+
                     var dimensionRows = ProcessAndBuildDimensionRows(
                         worksheet,
                         dimensionColumns,
@@ -218,16 +222,13 @@ namespace DataFlow.BL.Services
                         normalValueData,
                         constantValues,
                         orderedOutputColumns,
-                        validRows);
+                        textColumnsRows);
 
                     resultRows.AddRange(dimensionRows);
 
                     Notify(ProcessNotificationLevel.Info,
                         $"Filas de dimensiones generadas: {dimensionRows.Count}");
                 }
-
-                Notify(ProcessNotificationLevel.Info,
-                    $"✓ Procesamiento completado: {resultRows.Count} filas generadas");
             }
             catch (Exception ex)
             {
@@ -242,64 +243,33 @@ namespace DataFlow.BL.Services
 
         #region PASO 1: Identificar filas válidas
 
-        private HashSet<int> IdentifyValidRows(IXLWorksheet worksheet, List<ConfigColumn> normalValueColumns)
+        // Método consolidado para identificar filas válidas con filtro opcional por tipo de dato
+        private HashSet<int> IdentifyValidRowsFromColumns(List<ConfigColumn> columns, int? filterByDataTypeId = null)
         {
             var validRows = new HashSet<int>();
 
-            if (normalValueColumns.Count <= 0)
-                return validRows;
+            // Aplicar filtro de tipo de dato si se especifica
+            var filteredColumns = filterByDataTypeId.HasValue
+                ? columns.Where(c => c.DataTypeId == filterByDataTypeId.Value).ToList()
+                : columns;
 
-            foreach (var column in normalValueColumns)
+            if (!filteredColumns.Any())
             {
-                if (column.Ranges == null || column.Ranges.Count <= 0)
-                    continue;
-
-                foreach (var range in column.Ranges)
+                if (filterByDataTypeId == _lookupIds.Numerico)
                 {
-                    var from = ParseCellAddress(range.RFrom!);
-                    var to = ParseCellAddress(range.RTo!);
-
-                    for (int row = from.Row; row <= to.Row; row++)
-                    {
-                        for (int col = from.Col; col <= to.Col; col++)
-                        {
-                            var cell = worksheet.Cell(row, col);
-                            var value = ReadCellValue(cell, column);
-
-                            if (!IsEmptyValue(value, column.DataTypeId))
-                            {
-                                validRows.Add(row);
-                                break;
-                            }
-                        }
-                    }
+                    Notify(ProcessNotificationLevel.Info,
+                        "No hay columnas de valor normal numéricas. El primer grupo no generará filas.");
                 }
+                return validRows;
             }
 
-            return validRows;
-        }
-        private HashSet<int> IdentifyValidRowsForNormalGroup(List<ConfigColumn> normalValueColumns)
-        {
-            var validRows = new HashSet<int>();
-
-            // Filtrar solo columnas de tipo numérico
-            var numericColumns = normalValueColumns
-                .Where(c => c.DataTypeId == _lookupIds.Numerico)
-                .ToList();
-
-            // Si no hay columnas numéricas, no hay filas válidas para el primer grupo
-            if (numericColumns.Count <= 0)
+            if (filterByDataTypeId == _lookupIds.Numerico)
             {
                 Notify(ProcessNotificationLevel.Info,
-                    "No hay columnas de valor normal numéricas. El primer grupo no generará filas.");
-                return validRows;
+                    $"Columnas numéricas encontradas para filtro: {filteredColumns.Count}");
             }
 
-            Notify(ProcessNotificationLevel.Info,
-                $"Columnas numéricas encontradas para filtro: {numericColumns.Count}");
-
-            // Agregar todas las filas que están dentro de los rangos de columnas numéricas
-            foreach (var column in numericColumns)
+            foreach (var column in filteredColumns)
             {
                 if (column.Ranges == null || !column.Ranges.Any())
                     continue;
@@ -309,22 +279,85 @@ namespace DataFlow.BL.Services
                     var from = ParseCellAddress(range.RFrom!);
                     var to = ParseCellAddress(range.RTo!);
 
-                    // Agregar todas las filas dentro del rango (independiente del valor)
+                    // Agregar todas las filas dentro del rango
                     for (int row = from.Row; row <= to.Row; row++)
                     {
                         validRows.Add(row);
                     }
 
-                    Notify(ProcessNotificationLevel.Info,
-                        $"  Columna '{column.Name}' - Rango {range.RFrom} a {range.RTo}: filas {from.Row}-{to.Row}");
+                    if (filterByDataTypeId == _lookupIds.Numerico)
+                    {
+                        Notify(ProcessNotificationLevel.Info,
+                            $"  Columna '{column.Name}' - Rango {range.RFrom} a {range.RTo}: filas {from.Row}-{to.Row}");
+                    }
                 }
             }
 
             return validRows;
         }
 
-        #endregion
+        private List<Dictionary<string, object>> BuildNormalValueRows(
+    Dictionary<int, Dictionary<int, object>> normalValueData,
+    Dictionary<int, object> constantValues,
+    List<ConfigColumn> orderedOutputColumns,
+    List<ConfigColumn> contenedoraColumns,
+    HashSet<int> rowsToInclude) // NUEVO PARÁMETRO
+        {
+            var rows = new List<Dictionary<string, object>>();
 
+            // Solo procesar las filas que están en rowsToInclude
+            foreach (var row in normalValueData.Keys.Where(r => rowsToInclude.Contains(r)).OrderBy(r => r))
+            {
+                var normalData = normalValueData[row];
+                var outputRow = new Dictionary<string, object>();
+
+                foreach (var column in orderedOutputColumns)
+                {
+                    var columnName = column.NameDisplay ?? column.Name ?? $"Column_{column.IndexColumn}";
+                    object? value;
+
+                    if (column.ColumnTypeId == _lookupIds.Constante)
+                    {
+                        value = constantValues.TryGetValue(column.Id, out var v)
+                            ? v
+                            : GetDefaultValue(column, null);
+                    }
+                    else if (column.ColumnTypeId == _lookupIds.Valor)
+                    {
+                        if (IsContenedor(column))
+                        {
+                            // Contenedora = 0 o default en filas normales
+                            value = GetDefaultValue(column, null);
+                        }
+                        else
+                        {
+                            value = normalData.TryGetValue(column.Id, out var v)
+                                ? v
+                                : GetDefaultValue(column, null);
+                        }
+                    }
+                    else if (column.ColumnTypeId == _lookupIds.Dimension)
+                    {
+                        // Dimensión = vacío en filas normales
+                        value = string.Empty;
+                    }
+                    else
+                    {
+                        value = GetDefaultValue(column, null);
+                    }
+
+                    outputRow[columnName] = value ?? string.Empty;
+                }
+
+                rows.Add(outputRow);
+            }
+
+            return rows;
+        }
+
+
+
+        #endregion
         #region PASO 2: Procesar columnas Valor Normal con fill-forward
 
         private Dictionary<int, Dictionary<int, object>> ProcessNormalValueColumns(
