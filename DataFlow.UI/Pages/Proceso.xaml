@@ -66,6 +66,15 @@
             <TextBlock Text="Ruta del Archivo de Salida:" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="OutputPathTextBlock" Text="" TextWrapping="Wrap" Background="#F0F0F0" Padding="5"/>
         </StackPanel>
+        <StackPanel Grid.Row="5" Margin="0,0,0,20">
+            <CheckBox x:Name="AutoOpenFileCheckBox"
+              Content="Abrir automáticamente el archivo procesado"
+              IsChecked="False"
+              Checked="AutoOpenFileCheckBox_Changed"
+              Unchecked="AutoOpenFileCheckBox_Changed"
+              VerticalAlignment="Center"
+              Margin="0,0,0,5"/>
+        </StackPanel>
         <Grid Grid.Row="6" x:Name="MonitorGrid"
               Background="#FFFFFF"
               HorizontalAlignment="Stretch"

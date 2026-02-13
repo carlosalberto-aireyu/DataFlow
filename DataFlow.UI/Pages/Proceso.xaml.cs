@@ -38,6 +38,7 @@ namespace DataFlow.UI.Pages
         private readonly IApplicationStateService _appStateService;
         private readonly IConfigTemplateManager _templateManager;
         private readonly IHistProcessManager _histProcessManager;
+        private readonly IUserPreferencesService _userPreferencesService;
 
         private ProcessMonitorControl _processMonitor;
 
@@ -46,14 +47,18 @@ namespace DataFlow.UI.Pages
                        IApplicationStateService appStateService,
                        IQueryDispatcher queryDispatcher,
                        IConfigTemplateManager templateManager,
-                       IHistProcessManager histProcessManager
+                       IHistProcessManager histProcessManager,
+                       IUserPreferencesService userPreferencesService
                        )
         {
-            InitializeComponent();
+            
             _excelProcessingService = excelProcessingService ?? throw new ArgumentNullException(nameof(excelProcessingService));
             _appStateService = appStateService ?? throw new ArgumentNullException(nameof(appStateService));
             _templateManager = templateManager ?? throw new ArgumentNullException(nameof(templateManager));
             _histProcessManager = histProcessManager ?? throw new ArgumentNullException(nameof(histProcessManager));
+            _userPreferencesService = userPreferencesService ?? throw new ArgumentNullException(nameof(userPreferencesService));
+
+            InitializeComponent();
 
             _processMonitor = new ProcessMonitorControl(_appStateService);
             MonitorGrid.Children.Add(_processMonitor);
@@ -61,15 +66,19 @@ namespace DataFlow.UI.Pages
 
 
             Loaded += Proceso_Loaded;
-            Unloaded += Proceso_Unloaded; 
+            Unloaded += Proceso_Unloaded;
         }
 
         private void Proceso_Loaded(object sender, RoutedEventArgs e)
         {
-            
+
             _appStateService.PropertyChanged += ApplicationStateService_PropertyChanged;
             Load_Notifications();
             InitializeDisplay();
+
+            bool autoOpen = _userPreferencesService.GetAutoOpenExcelFile();
+
+            AutoOpenFileCheckBox.IsChecked = autoOpen;
 
         }
 
@@ -85,7 +94,7 @@ namespace DataFlow.UI.Pages
         }
         private void Load_Notifications()
         {
-            if(_appStateService.NotificationsProcess.Count > 0)
+            if (_appStateService.NotificationsProcess.Count > 0)
             {
                 foreach (ProcessNotification item in _appStateService.NotificationsProcess)
                 {
@@ -98,11 +107,11 @@ namespace DataFlow.UI.Pages
 
         private void ApplicationStateService_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
-       
+
             if (e.PropertyName == nameof(IApplicationStateService.ExcelFilePath) ||
                 e.PropertyName == nameof(IApplicationStateService.SelectedTemplate))
             {
-       
+
                 Application.Current.Dispatcher.Invoke(InitializeDisplay);
             }
         }
@@ -126,7 +135,7 @@ namespace DataFlow.UI.Pages
                 TemplateDescriptionTextBlock.Foreground = Brushes.OrangeRed;
             }
 
-            
+
             StartProcessButton.IsEnabled = !string.IsNullOrWhiteSpace(_appStateService.ExcelFilePath)
                                         && File.Exists(_appStateService.ExcelFilePath)
                                         && _appStateService.SelectedTemplate != null;
@@ -206,7 +215,7 @@ namespace DataFlow.UI.Pages
                     StartProcessButton.IsEnabled = true;
                     return;
                 }
-                templateConfig = fullTemplateResult.Value; 
+                templateConfig = fullTemplateResult.Value;
 
                 if (templateConfig.ConfigColumns == null || !templateConfig.ConfigColumns.Any())
                 {
@@ -254,8 +263,17 @@ namespace DataFlow.UI.Pages
 
 
                     MessageBox.Show($"Archivo Excel procesado exitosamente y guardado en:\n{result.Value}", "Éxito", MessageBoxButton.OK, MessageBoxImage.Information);
-                    
-                    _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(result.Value!) { UseShellExecute = true });
+                    if (AutoOpenFileCheckBox.IsChecked == true)
+                    {
+                        try
+                        {
+                            _ = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(result.Value!) { UseShellExecute = true });
+                        }
+                        catch (Exception ex)
+                        {
+                            MessageBox.Show($"No se pudo abrir el archivo automáticamente: {ex.Message}", "Error al Abrir Archivo", MessageBoxButton.OK, MessageBoxImage.Warning);
+                        }
+                    }
                 }
                 else
                 {
@@ -294,22 +312,33 @@ namespace DataFlow.UI.Pages
             }
             catch (Exception ex)
             {
-                   MessageBox.Show($"Error al guardar el historico :{ex.Message} ", "Error Crítico", MessageBoxButton.OK, MessageBoxImage.Error);
+                MessageBox.Show($"Error al guardar el historico :{ex.Message} ", "Error Crítico", MessageBoxButton.OK, MessageBoxImage.Error);
             }
         }
         private void SelectExcelFileButton_Click(object sender, RoutedEventArgs e)
         {
+            string initialDirectory = _userPreferencesService.GetLastExcelFolder();
             var openFileDialog = new OpenFileDialog
             {
                 Filter = "Archivos de Excel (*.xlsx;*.xls)|*.xlsx;*.xls|Todos los archivos (*.*)|*.*",
                 Title = "Seleccionar archivo de Excel",
-                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments)
+                InitialDirectory = initialDirectory
             };
             if (openFileDialog.ShowDialog() == true)
             {
                 _appStateService.ExcelFilePath = openFileDialog.FileName;
                 ExcelFilePathTextBox.Text = openFileDialog.FileName;
+
+                string selectedFolder = System.IO.Path.GetDirectoryName(openFileDialog.FileName) ?? initialDirectory;
+                _userPreferencesService.SaveLastExcelFolder(selectedFolder);
+
+                System.Diagnostics.Debug.WriteLine($"[SelectExcelFileButton_Click] Nueva carpeta guardada: {selectedFolder}");
             }
+        }
+        private void AutoOpenFileCheckBox_Changed(object sender, RoutedEventArgs e)
+        {
+            bool isChecked = AutoOpenFileCheckBox.IsChecked ?? false;
+            _userPreferencesService.SaveAutoOpenExcelFile(isChecked);
         }
     }
 }
