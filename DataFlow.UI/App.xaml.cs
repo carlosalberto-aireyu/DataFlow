@@ -94,10 +94,11 @@ namespace DataFlow.UI
             services.AddSingleton<ILookupService, LookupService>();
 
             services.AddSingleton<IUserPreferencesService, UserPreferencesService>();
+            services.AddSingleton<IProcessQueueService, ProcessQueueService>();
 
             services.AddSingleton<ConfigTemplatesViewModel>();
             services.AddSingleton<ConfigColumnsViewModel>();
-
+           
             services.AddSingleton<ParametrosViewModel>();
             
             services.AddTransient<MainWindow>(); 

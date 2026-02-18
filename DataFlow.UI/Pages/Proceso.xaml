@@ -4,12 +4,17 @@
       xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" 
       xmlns:d="http://schemas.microsoft.com/expression/blend/2008" 
       xmlns:local="clr-namespace:DataFlow.UI.Pages"
+      xmlns:converters="clr-namespace:DataFlow.UI.Converters"
       mc:Ignorable="d" 
       d:DesignHeight="450" d:DesignWidth="800"
       Title="Proceso">
 
+    <Page.Resources>
+        <converters:ProcessQueueStatusConverter x:Key="StatusConverter"/>
+    </Page.Resources>
     <Grid Margin="20">
         <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -45,13 +50,12 @@
                     Style="{StaticResource FilePathTextBoxStyle}" />
                 <Button Grid.Column="2"
                     x:Name="SelectExcelFileButton"
-                    Content="Seleccionar Archivo"
+                    Content="Seleccionar Archivo(s)"
                     Click="SelectExcelFileButton_Click"
                     VerticalAlignment="Center"/>
             </Grid>
-
         </StackPanel>
-        
+
         <StackPanel Grid.Row="2" Margin="0,0,0,10">
             <TextBlock Text="Plantilla Seleccionada:" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="TemplateDescriptionTextBlock" Text="Cargando..." TextWrapping="Wrap" Background="#F0F0F0" Padding="5"/>
@@ -66,6 +70,7 @@
             <TextBlock Text="Ruta del Archivo de Salida:" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="OutputPathTextBlock" Text="" TextWrapping="Wrap" Background="#F0F0F0" Padding="5"/>
         </StackPanel>
+
         <StackPanel Grid.Row="5" Margin="0,0,0,20">
             <CheckBox x:Name="AutoOpenFileCheckBox"
               Content="Abrir automáticamente el archivo procesado"
@@ -75,19 +80,60 @@
               VerticalAlignment="Center"
               Margin="0,0,0,5"/>
         </StackPanel>
-        <Grid Grid.Row="6" x:Name="MonitorGrid"
+
+        <!-- Cola de Procesamiento -->
+        <StackPanel Grid.Row="6" Margin="0,0,0,20">
+            <Grid Margin="0,0,0,10">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <TextBlock x:Name="QueueCountTextBlock" Grid.Column="0" Text="Cola vacía" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <Button Grid.Column="1" Content="Limpiar Cola" Click="ClearQueueButton_Click" Margin="5,0,5,0" Padding="10,5"/>
+            </Grid>
+
+            <ListBox x:Name="QueueListBox" Height="150" BorderThickness="1" BorderBrush="#CCCCCC">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <Grid Margin="0,5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="100"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding FileName}" FontWeight="Bold"/>
+                                <TextBlock Text="{Binding FilePath}" FontSize="10" Foreground="Gray" TextTrimming="CharacterEllipsis"/>
+                                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
+                                    <TextBlock Text="{Binding Status, Converter={StaticResource StatusConverter }}" FontSize="9" Foreground="Blue" Margin="0,0,10,0"/>
+                                    <TextBlock Text="{Binding ErrorMessage}" FontSize="9" Foreground="Red"/>
+                                </StackPanel>
+                            </StackPanel>
+
+                            <TextBlock Grid.Column="1" Text="{Binding AddedAt, StringFormat='HH:mm:ss'}" 
+                                     VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="9"/>
+
+                            <Button Grid.Column="2" Content="Eliminar" Click="RemoveFromQueueButton_Click" 
+                                  Padding="5,2" Margin="5,0,0,0" FontSize="10"/>
+                        </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </StackPanel>
+
+        <Grid Grid.Row="7" x:Name="MonitorGrid"
               Background="#FFFFFF"
               HorizontalAlignment="Stretch"
-              VerticalAlignment="Stretch"
-              >
+              VerticalAlignment="Stretch">
             <Grid.RowDefinitions>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
         </Grid>
 
-        <Button Grid.Row="7" x:Name="StartProcessButton" Content="Iniciar Proceso de Normalización"
-            HorizontalAlignment="Center" VerticalAlignment="Bottom" Width="250" Height="40" Click="StartProcessButton_Click"
-            />
+        <Button Grid.Row="8" x:Name="StartProcessButton" Content="Iniciar Proceso de Normalización"
+            HorizontalAlignment="Center" VerticalAlignment="Bottom" Width="250" Height="40" Click="StartProcessButton_Click"/>
 
     </Grid>
 </Page>
