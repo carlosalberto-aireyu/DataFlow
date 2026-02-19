@@ -4,28 +4,16 @@ using DataFlow.Core.Common;
 using DataFlow.Core.Constants;
 using DataFlow.Core.Features;
 using DataFlow.Core.Features.Commands;
-using DataFlow.Core.Features.Queries;
 using DataFlow.Core.Models;
 using DataFlow.UI.Controls;
 using DataFlow.UI.Services;
 using Microsoft.Win32;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
-using System.Linq;
-using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 
 namespace DataFlow.UI.Pages
 {
@@ -155,8 +143,8 @@ namespace DataFlow.UI.Pages
         {
             var queueCount = _queueService.GetQueueCount();
             QueueCountTextBlock.Text = queueCount > 0
-                ? $"Archivos en cola: {queueCount}"
-                : "Cola vacía";
+                ? $"Archivos en lista: {queueCount}"
+                : "Lista vacía";
 
             QueueListBox.ItemsSource = _queueService.GetQueueItems();
         }
@@ -221,22 +209,14 @@ namespace DataFlow.UI.Pages
 
             if (openFileDialog.ShowDialog() == true && openFileDialog.FileNames.Length > 0)
             {
-                // Si selecciona múltiples archivos, añadirlos todos a la cola
-                if (openFileDialog.FileNames.Length > 1)
-                {
-                    _queueService.EnqueueFiles(openFileDialog.FileNames);
-                    ExcelFilePathTextBox.Text = $"{openFileDialog.FileNames.Length} archivos añadidos a la cola";
-                    ProcessStatusTextBlock.Text = "Archivos añadidos a la cola. Haz clic en 'Iniciar Proceso' para comenzar.";
-                    ProcessStatusTextBlock.Foreground = Brushes.Blue;
-                }
-                else
-                {
-                    // Si selecciona un solo archivo, tratarlo como archivo actual
-                    _appStateService.ExcelFilePath = openFileDialog.FileName;
-                    ExcelFilePathTextBox.Text = openFileDialog.FileName;
-                    ProcessStatusTextBlock.Text = "Archivo seleccionado. Haz clic en 'Iniciar Proceso' para comenzar.";
-                    ProcessStatusTextBlock.Foreground = Brushes.Black;
-                }
+                // Todos los archivos seleccionados van a la cola, incluso si es uno solo
+                int agregados = _queueService.EnqueueFiles(openFileDialog.FileNames);
+
+                ExcelFilePathTextBox.Text = $"{agregados} archivo(s) añadido(s) a la cola";
+
+                ProcessStatusTextBlock.Text = $"{agregados} archivos añadidos a la cola. Haz clic en 'Iniciar Proceso' para comenzar.";
+
+                ProcessStatusTextBlock.Foreground = Brushes.Blue;
 
                 string selectedFolder = System.IO.Path.GetDirectoryName(openFileDialog.FileNames[0]) ?? initialDirectory;
                 _userPreferencesService.SaveLastExcelFolder(selectedFolder);
@@ -246,7 +226,7 @@ namespace DataFlow.UI.Pages
             }
         }
 
-        private async void StartProcessButton_Click(object sender, RoutedEventArgs e)
+        private void StartProcessButton_Click(object sender, RoutedEventArgs e)
         {
             if (AlphaVersionService.IsExpired)
             {
@@ -273,27 +253,42 @@ namespace DataFlow.UI.Pages
                 return;
             }
 
+            // Preguntar si desea limpiar el historial antes de procesar
+            var allItems = _queueService.GetQueueItems();
+            var hasHistory = allItems.Any(item =>
+                item.Status == ProcessQueueItemStatus.Completed ||
+                item.Status == ProcessQueueItemStatus.Failed);
+
+            if (hasHistory)
+            {
+                var result = MessageBox.Show(
+                    "¿Desea limpiar el historial de proceso antes de comenzar?",
+                    "Limpiar Historial",
+                    MessageBoxButton.YesNoCancel,
+                    MessageBoxImage.Question);
+
+                if (result == MessageBoxResult.Cancel)
+                    return;
+
+                if (result == MessageBoxResult.Yes)
+                {
+                    _queueService.ClearHistory();
+                }
+            }
+
+            // Resetear el token de cancelación
+            _queueService.ResetCancellationToken();
+
             // Si hay archivos en la cola, procesarlos
             if (_queueService.GetQueueCount() > 0)
             {
                 _isProcessing = true;
                 StartProcessButton.IsEnabled = false;
+                CancelProcessButton.Visibility = Visibility.Visible;
                 ProcessStatusTextBlock.Text = "Procesando cola de archivos...";
                 ProcessStatusTextBlock.Foreground = Brushes.Blue;
 
                 ProcessNextQueueItem();
-            }
-            // Si hay un archivo seleccionado, procesarlo
-            else if (!string.IsNullOrWhiteSpace(_appStateService.ExcelFilePath) &&
-                     File.Exists(_appStateService.ExcelFilePath))
-            {
-                _isProcessing = true;
-                StartProcessButton.IsEnabled = false;
-
-                _processMonitor.Clear();
-                _appStateService.NotificationsProcess.Clear();
-
-                await ProcessSingleFileAsync();
             }
             else
             {
@@ -304,6 +299,20 @@ namespace DataFlow.UI.Pages
                     "Error de Validación",
                     MessageBoxButton.OK,
                     MessageBoxImage.Error);
+            }
+        }
+
+        private void CancelProcessButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (MessageBox.Show(
+                "¿Desea cancelar el procesamiento actual?",
+                "Confirmar Cancelación",
+                MessageBoxButton.YesNo,
+                MessageBoxImage.Question) == MessageBoxResult.Yes)
+            {
+                _queueService.RequestCancellation();
+                ProcessStatusTextBlock.Text = "Cancelando procesamiento...";
+                ProcessStatusTextBlock.Foreground = Brushes.Orange;
             }
         }
 
@@ -458,6 +467,13 @@ namespace DataFlow.UI.Pages
 
         private void ProcessNextQueueItem()
         {
+            // Verificar si se solicitó cancelación
+            if (_queueService.GetCancellationToken().IsCancellationRequested)
+            {
+                FinishProcessing(cancelled: true);
+                return;
+            }
+
             var item = _queueService.DequeueFile();
             if (item == null)
             {
@@ -465,7 +481,6 @@ namespace DataFlow.UI.Pages
                 return;
             }
 
-            item.Status = ProcessQueueItemStatus.Processing;
             UpdateQueueDisplay();
 
             ProcessStatusTextBlock.Text = $"Procesando: {item.FileName}";
@@ -477,6 +492,14 @@ namespace DataFlow.UI.Pages
         {
             try
             {
+                // Verificar si se solicitó cancelación
+                if (_queueService.GetCancellationToken().IsCancellationRequested)
+                {
+                    _queueService.NotifyItemFailed(queueItem, "Procesamiento cancelado por el usuario.");
+                    FinishProcessing(cancelled: true);
+                    return;
+                }
+
                 // Validaciones previas
                 if (!File.Exists(queueItem.FilePath))
                 {
@@ -571,8 +594,7 @@ namespace DataFlow.UI.Pages
                     else
                     {
                         await SaveHistProcessAsync(templateConfig.Id, queueItem.FilePath, outputFilePath, "Error");
-                        _queueService.NotifyItemFailed(queueItem, $"Ha ocurrido un error: {result.Error}" );
-                                      
+                        _queueService.NotifyItemFailed(queueItem, $"Ha ocurrido un error: {result.Error}");
                     }
                 }
                 catch (Exception ex)
@@ -588,12 +610,24 @@ namespace DataFlow.UI.Pages
             }
         }
 
-        private void FinishProcessing()
+        private void FinishProcessing(bool cancelled = false)
         {
             _isProcessing = false;
+            StartProcessButton.IsEnabled = true;
+            CancelProcessButton.Visibility = Visibility.Collapsed;
+
+            if (cancelled)
+            {
+                ProcessStatusTextBlock.Text = "Procesamiento cancelado por el usuario.";
+                ProcessStatusTextBlock.Foreground = Brushes.Orange;
+            }
+            else
+            {
+                ProcessStatusTextBlock.Text = "Proceso completado.";
+                ProcessStatusTextBlock.Foreground = Brushes.Green;
+            }
+
             UpdateStartButtonState();
-            ProcessStatusTextBlock.Text = "Proceso completado.";
-            ProcessStatusTextBlock.Foreground = Brushes.Green;
         }
 
         private async Task SaveHistProcessAsync(int configtemplateid, string inputFile, string outputFile, string status)
@@ -635,9 +669,10 @@ namespace DataFlow.UI.Pages
 
         private void ClearQueueButton_Click(object sender, RoutedEventArgs e)
         {
+            
             if (MessageBox.Show(
-                "¿Desea vaciar toda la cola?",
-                "Confirmar",
+                "¿Desea eliminar toda la cola incluyendo historial?",
+                "Limpiar Cola",
                 MessageBoxButton.YesNo,
                 MessageBoxImage.Question) == MessageBoxResult.Yes)
             {

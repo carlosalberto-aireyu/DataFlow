@@ -6,7 +6,7 @@ namespace DataFlow.UI.Services
 {
     public static class AlphaVersionService
     {
-        public const string VERSION = "1.0.0-alpha.4";
+        public const string VERSION = "1.0.0-rc1";
         private static readonly DateTime EXPIRY_DATE = new DateTime(2026, 3, 31);
         private const string SECURITY_HASH = "5F16E3";
 
@@ -26,9 +26,9 @@ namespace DataFlow.UI.Services
         public static string GetExpiryMessage()
         {
             if(IsExpired)
-                return $"La versión ALPHA de esta aplicación expiró el {EXPIRY_DATE:dd/MM/yyyy}.\nContacte al administrador para obtener una versión actualizada.";
+                return $"La versión Release Candidate (RC) de esta aplicación expiró el {EXPIRY_DATE:dd/MM/yyyy}.\nContacte al administrador para obtener una versión actualizada.";
             var daysLeft = (EXPIRY_DATE - DateTime.Now).Days;
-            return $"Versión ALPHA - Expira en {daysLeft} días ({EXPIRY_DATE:dd/MM/yyyy})";
+            return $"Versión Release Candidate (RC) - Expira en {daysLeft} días ({EXPIRY_DATE:dd/MM/yyyy})";
         }
         public static string GetVersionInfo()
         {

@@ -1,9 +1,6 @@
-﻿using DocumentFormat.OpenXml.Office2010.Excel;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace DataFlow.UI.Services
 {
@@ -11,7 +8,7 @@ namespace DataFlow.UI.Services
     {
         private readonly Queue<ProcessQueueItem> _queue = new();
         private int _itemIdCounter = 0;
-
+        private CancellationTokenSource _cancellationTokenSource = new();
 
         public event EventHandler? QueueChanged;
         public event EventHandler<ProcessQueueItemEventArgs>? ItemProcessed;
@@ -22,14 +19,34 @@ namespace DataFlow.UI.Services
             return _queue.ToList().AsReadOnly();
         }
 
-        public void EnqueueFile(string filePath)
+        public IReadOnlyList<ProcessQueueItem> GetPendingItems()
         {
-            if(string.IsNullOrWhiteSpace(filePath))
-                throw new ArgumentException("La ruta del archivo no debe estar vacia.", nameof(filePath));
+            return _queue
+                .Where(item => item.Status == ProcessQueueItemStatus.Pending)
+                .ToList()
+                .AsReadOnly();
+        }
+
+        public bool EnqueueFile(string filePath)
+        {
+            if (string.IsNullOrWhiteSpace(filePath))
+                throw new ArgumentException("La ruta del archivo no debe estar vacía.", nameof(filePath));
+
+            // Normalizar la ruta para comparación
+            string normalizedPath = System.IO.Path.GetFullPath(filePath).ToLowerInvariant();
+
+            // Verificar si el archivo ya existe en la cola (pendiente)
+            if (_queue.Any(item =>
+                System.IO.Path.GetFullPath(item.FilePath).ToLowerInvariant() == normalizedPath &&
+                item.Status == ProcessQueueItemStatus.Pending))
+            {
+                System.Diagnostics.Debug.WriteLine($"[EnqueueFile] El archivo ya existe en la cola: {filePath}");
+                return false;
+            }
 
             var item = new ProcessQueueItem
             {
-                Id= ++_itemIdCounter,
+                Id = ++_itemIdCounter,
                 FilePath = filePath,
                 FileName = System.IO.Path.GetFileName(filePath),
                 AddedAt = DateTime.Now,
@@ -37,32 +54,42 @@ namespace DataFlow.UI.Services
             };
             _queue.Enqueue(item);
             OnQueueChanged();
+            return true;
+        }
 
-        }
-        public void EnqueueFiles(IEnumerable<string> filePaths)
+        public int EnqueueFiles(IEnumerable<string> filePaths)
         {
-            foreach(var filePath in filePaths)
+            int addedCount = 0;
+            foreach (var filePath in filePaths)
             {
-                EnqueueFile(filePath);
+                if(EnqueueFile(filePath))
+                    addedCount++;
             }
+            return addedCount;
         }
+
         public ProcessQueueItem? PeekNextFile()
         {
-            return _queue.Count > 0 ? _queue.Peek() : null;
+            return _queue
+                .FirstOrDefault(item => item.Status == ProcessQueueItemStatus.Pending);
         }
+
         public ProcessQueueItem? DequeueFile()
         {
-            if(_queue.Count <= 0)
+            var item = _queue
+                .FirstOrDefault(item => item.Status == ProcessQueueItemStatus.Pending);
+
+            if (item == null)
                 return null;
 
-            var item = _queue.Dequeue();
+            item.Status = ProcessQueueItemStatus.Processing;
             OnQueueChanged();
             return item;
-
         }
+
         public void RemoveAt(int index)
         {
-            if(index < 0 || index >= _queue.Count)
+            if (index < 0 || index >= _queue.Count)
                 throw new ArgumentOutOfRangeException(nameof(index), "El índice está fuera de rango.");
 
             var items = _queue.ToList();
@@ -80,14 +107,50 @@ namespace DataFlow.UI.Services
             _queue.Clear();
             OnQueueChanged();
         }
-        
+
+        public void ClearHistory()
+        {
+            var itemsToKeep = _queue
+                .Where(item => item.Status == ProcessQueueItemStatus.Pending)
+                .ToList();
+
+            _queue.Clear();
+            foreach (var item in itemsToKeep)
+            {
+                _queue.Enqueue(item);
+            }
+            OnQueueChanged();
+        }
+
         public int GetQueueCount()
         {
-            return _queue.Count;
+            return _queue.Count(item => item.Status == ProcessQueueItemStatus.Pending);
+        }
+
+        public CancellationToken GetCancellationToken()
+        {
+            return _cancellationTokenSource.Token;
+        }
+
+        public void RequestCancellation()
+        {
+            if (!_cancellationTokenSource.IsCancellationRequested)
+            {
+                _cancellationTokenSource.Cancel();
+            }
+        }
+
+        public void ResetCancellationToken()
+        {
+            _cancellationTokenSource.Dispose();
+            _cancellationTokenSource = new CancellationTokenSource();
         }
 
         public void NotifyItemProcessed(ProcessQueueItem item)
         {
+            if (item == null)
+                throw new ArgumentNullException(nameof(item));
+
             item.Status = ProcessQueueItemStatus.Completed;
             item.CompletedAt = DateTime.Now;
             ItemProcessed?.Invoke(this, new ProcessQueueItemEventArgs(item));
@@ -95,8 +158,12 @@ namespace DataFlow.UI.Services
 
         public void NotifyItemFailed(ProcessQueueItem item, string errorMessage)
         {
+            if (item == null)
+                throw new ArgumentNullException(nameof(item));
+
             item.Status = ProcessQueueItemStatus.Failed;
             item.CompletedAt = DateTime.Now;
+            item.ErrorMessage = errorMessage;
             ItemFailed?.Invoke(this, new ProcessQueueItemEventArgs(item));
         }
 

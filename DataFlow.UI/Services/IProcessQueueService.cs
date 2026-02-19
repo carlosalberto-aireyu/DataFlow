@@ -1,10 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-namespace DataFlow.UI.Services
+﻿namespace DataFlow.UI.Services
 {
     /// <summary>
     /// Servicio para gestionar una cola de archivos a procesar.
@@ -17,14 +11,20 @@ namespace DataFlow.UI.Services
         IReadOnlyList<ProcessQueueItem> GetQueueItems();
 
         /// <summary>
-        /// Añade un archivo a la cola.
+        /// Obtiene solo los archivos pendientes de procesar.
         /// </summary>
-        void EnqueueFile(string filePath);
+        IReadOnlyList<ProcessQueueItem> GetPendingItems();
 
         /// <summary>
-        /// Añade múltiples archivos a la cola.
+        /// Añade un archivo a la cola.
+        /// Retorna true si el archivo fue agregado, false si ya existía.
         /// </summary>
-        void EnqueueFiles(IEnumerable<string> filePaths);
+        bool EnqueueFile(string filePath);
+
+        /// <summary>
+        /// Añade múltiples archivos a la cola y retorna la cantidad agregada.
+        /// </summary>
+        int EnqueueFiles(IEnumerable<string> filePaths);
 
         /// <summary>
         /// Obtiene el siguiente archivo de la cola sin eliminarlo.
@@ -42,14 +42,34 @@ namespace DataFlow.UI.Services
         void RemoveAt(int index);
 
         /// <summary>
-        /// Vacía toda la cola.
+        /// Vacía toda la cola incluyendo historial.
         /// </summary>
         void Clear();
 
         /// <summary>
-        /// Obtiene la cantidad de archivos en la cola.
+        /// Limpia solo el historial (completados y errores).
+        /// </summary>
+        void ClearHistory();
+
+        /// <summary>
+        /// Obtiene la cantidad de archivos pendientes en la cola.
         /// </summary>
         int GetQueueCount();
+
+        /// <summary>
+        /// Obtiene el token de cancelación para interrumpir el procesamiento.
+        /// </summary>
+        CancellationToken GetCancellationToken();
+
+        /// <summary>
+        /// Solicita la cancelación del procesamiento.
+        /// </summary>
+        void RequestCancellation();
+
+        /// <summary>
+        /// Resetea el token de cancelación para un nuevo procesamiento.
+        /// </summary>
+        void ResetCancellationToken();
 
         /// <summary>
         /// Notifica que un elemento fue procesado correctamente.

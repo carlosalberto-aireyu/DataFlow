@@ -11,10 +11,12 @@
 
     <Page.Resources>
         <converters:ProcessQueueStatusConverter x:Key="StatusConverter"/>
+        <converters:FilePathToDirectoryConverter x:Key="DirectoryConverter"/>
+        <converters:StatusColorConverter x:Key="ColorConverter"/>
     </Page.Resources>
+
     <Grid Margin="20">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -25,9 +27,11 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
+        <!-- Título -->
         <TextBlock Grid.Row="0" Text="Procesamiento de Archivos Excel"
                FontSize="24" FontWeight="Bold" Margin="0,0,0,20" />
 
+        <!-- Selección de archivo -->
         <StackPanel Grid.Row="1">
             <Grid Margin="5" VerticalAlignment="Center">
                 <Grid.ColumnDefinitions>
@@ -56,21 +60,25 @@
             </Grid>
         </StackPanel>
 
+        <!-- Plantilla seleccionada -->
         <StackPanel Grid.Row="2" Margin="0,0,0,10">
             <TextBlock Text="Plantilla Seleccionada:" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="TemplateDescriptionTextBlock" Text="Cargando..." TextWrapping="Wrap" Background="#F0F0F0" Padding="5"/>
         </StackPanel>
 
+        <!-- Estado del proceso -->
         <StackPanel Grid.Row="3" Margin="0,0,0,20">
             <TextBlock Text="Estado del Proceso:" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="ProcessStatusTextBlock" Text="Listo para iniciar..." FontWeight="Bold" Foreground="Black" TextWrapping="Wrap" Background="#F0F0F0" Padding="5"/>
         </StackPanel>
 
+        <!-- Ruta del archivo de salida -->
         <StackPanel Grid.Row="4" VerticalAlignment="Top" Margin="0,0,0,20">
             <TextBlock Text="Ruta del Archivo de Salida:" FontWeight="SemiBold" Margin="0,0,0,5"/>
             <TextBlock x:Name="OutputPathTextBlock" Text="" TextWrapping="Wrap" Background="#F0F0F0" Padding="5"/>
         </StackPanel>
 
+        <!-- CheckBox para abrir automáticamente -->
         <StackPanel Grid.Row="5" Margin="0,0,0,20">
             <CheckBox x:Name="AutoOpenFileCheckBox"
               Content="Abrir automáticamente el archivo procesado"
@@ -81,59 +89,112 @@
               Margin="0,0,0,5"/>
         </StackPanel>
 
-        <!-- Cola de Procesamiento -->
-        <StackPanel Grid.Row="6" Margin="0,0,0,20">
-            <Grid Margin="0,0,0,10">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
-                <TextBlock x:Name="QueueCountTextBlock" Grid.Column="0" Text="Cola vacía" FontWeight="SemiBold" VerticalAlignment="Center"/>
-                <Button Grid.Column="1" Content="Limpiar Cola" Click="ClearQueueButton_Click" Margin="5,0,5,0" Padding="10,5"/>
+        <!-- Contenedor principal con dos columnas: Cola y Monitor -->
+        <Grid Grid.Row="6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="0.5*"/>
+                <ColumnDefinition Width="5"/>
+                <ColumnDefinition Width="0.5*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- COLUMNA IZQUIERDA: Cola de Procesamiento -->
+            <Grid Grid.Column="0" Margin="0,0,10,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="QueueCountTextBlock" Grid.Column="0" Text="Lista vacia" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Content="Limpiar Lista" Click="ClearQueueButton_Click" Padding="10,5"/>
+                </Grid>
+
+                <ListBox Grid.Row="1"
+             x:Name="QueueListBox" 
+             BorderThickness="1" 
+             BorderBrush="#CCCCCC"
+             ScrollViewer.VerticalScrollBarVisibility="Auto"
+             ScrollViewer.CanContentScroll="True">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <Grid Margin="0,5">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+
+                                <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding FileName}" FontWeight="Bold"/>
+                                    <TextBlock Text="{Binding FilePath, Converter={StaticResource DirectoryConverter}}" FontSize="9" Foreground="Gray" TextTrimming="CharacterEllipsis"/>
+                                    <StackPanel Orientation="Horizontal" Margin="0,3,0,0">
+                                        <TextBlock Text="{Binding Status, Converter={StaticResource StatusConverter}}" 
+                                           FontSize="10" 
+                                           Foreground="{Binding Status, Converter={StaticResource ColorConverter}}" 
+                                           Margin="0,0,10,0"/>
+                                        <TextBlock Text="{Binding ErrorMessage}" FontSize="8" Foreground="Red"/>
+                                    </StackPanel>
+                                </StackPanel>
+
+                                <Button Grid.Column="1" Content="✕" Click="RemoveFromQueueButton_Click" 
+                          Padding="5,2" Margin="5,0,0,0" FontSize="10" VerticalAlignment="Center"/>
+                            </Grid>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </Grid>
 
-            <ListBox x:Name="QueueListBox" Height="150" BorderThickness="1" BorderBrush="#CCCCCC">
-                <ListBox.ItemTemplate>
-                    <DataTemplate>
-                        <Grid Margin="0,5">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="100"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
+            <!-- DIVISOR -->
+            <GridSplitter Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Background="#CCCCCC" Cursor="SizeWE"/>
 
-                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
-                                <TextBlock Text="{Binding FileName}" FontWeight="Bold"/>
-                                <TextBlock Text="{Binding FilePath}" FontSize="10" Foreground="Gray" TextTrimming="CharacterEllipsis"/>
-                                <StackPanel Orientation="Horizontal" Margin="0,5,0,0">
-                                    <TextBlock Text="{Binding Status, Converter={StaticResource StatusConverter }}" FontSize="9" Foreground="Blue" Margin="0,0,10,0"/>
-                                    <TextBlock Text="{Binding ErrorMessage}" FontSize="9" Foreground="Red"/>
-                                </StackPanel>
-                            </StackPanel>
+            <!-- COLUMNA DERECHA: Monitor de Log -->
+            <Grid Grid.Column="2" Margin="10,0,0,0">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-                            <TextBlock Grid.Column="1" Text="{Binding AddedAt, StringFormat='HH:mm:ss'}" 
-                                     VerticalAlignment="Center" HorizontalAlignment="Center" FontSize="9"/>
+                <TextBlock Grid.Row="0" Text="Monitor de Proceso" FontWeight="SemiBold" Margin="0,0,0,10"/>
 
-                            <Button Grid.Column="2" Content="Eliminar" Click="RemoveFromQueueButton_Click" 
-                                  Padding="5,2" Margin="5,0,0,0" FontSize="10"/>
-                        </Grid>
-                    </DataTemplate>
-                </ListBox.ItemTemplate>
-            </ListBox>
-        </StackPanel>
-
-        <Grid Grid.Row="7" x:Name="MonitorGrid"
-              Background="#FFFFFF"
-              HorizontalAlignment="Stretch"
-              VerticalAlignment="Stretch">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
+                <Border Grid.Row="1" BorderThickness="1" BorderBrush="#CCCCCC">
+                    <Grid x:Name="MonitorGrid"
+                          Background="#FFFFFF"
+                          HorizontalAlignment="Stretch"
+                          VerticalAlignment="Stretch">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
 
-        <Button Grid.Row="8" x:Name="StartProcessButton" Content="Iniciar Proceso de Normalización"
-            HorizontalAlignment="Center" VerticalAlignment="Bottom" Width="250" Height="40" Click="StartProcessButton_Click"/>
+        <!-- Botón de iniciar proceso -->
+        <Grid Grid.Row="7" HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="0,20,0,0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button Grid.Column="0" 
+            x:Name="StartProcessButton" 
+            Content="Iniciar Proceso de Normalización"
+            Width="250" Height="40" 
+            Click="StartProcessButton_Click" 
+            Margin="0,0,10,0"/>
+
+            <Button Grid.Column="1" 
+            x:Name="CancelProcessButton" 
+            Content="Cancelar Proceso"
+            Width="150" Height="40" 
+            Click="CancelProcessButton_Click"
+            Background="#FF6B6B"
+            Foreground="White"
+            Visibility="Collapsed"/>
+        </Grid>
 
     </Grid>
 </Page>
